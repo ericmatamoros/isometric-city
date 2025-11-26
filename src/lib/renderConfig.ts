@@ -71,6 +71,21 @@ export const SPRITE_ORDER = [
 ] as const;
 
 // ============================================================================
+// SPRITE VERTICAL OFFSET ADJUSTMENTS
+// ============================================================================
+// Fine-tune vertical positioning for individual sprites.
+// Positive values push the sprite DOWN, negative values push it UP.
+// Values are multiplied by tile height (TILE_HEIGHT) for consistent scaling.
+// ============================================================================
+export const SPRITE_VERTICAL_OFFSETS: Record<string, number> = {
+  // Single-tile buildings that need adjustment
+  park: 0.10,           // Small park - push down ~10%
+  police_station: 0.15, // Police station - push down more
+  school: 0.10,         // School - push down ~10%
+  // Add more as needed
+};
+
+// ============================================================================
 // BUILDING TYPE TO SPRITE KEY MAPPING
 // ============================================================================
 // Maps game building types to sprite keys in SPRITE_ORDER

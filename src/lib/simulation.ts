@@ -1140,15 +1140,17 @@ function canPlaceMultiTileBuilding(
     return false;
   }
   
-  // Check all tiles are available (grass, empty, tree, or road - not water or other buildings)
+  // Check all tiles are available (grass, tree, or road - not water or existing buildings)
+  // NOTE: 'empty' tiles are placeholders from multi-tile buildings, so we can't build on them
+  // without first bulldozing the entire parent building
   for (let dy = 0; dy < height; dy++) {
     for (let dx = 0; dx < width; dx++) {
       const tile = grid[y + dy]?.[x + dx];
       if (!tile) return false;
       if (tile.building.type === 'water') return false;
-      // Can build on grass, trees, empty tiles (from other multi-tile buildings), or roads
-      // Roads will be replaced by the multi-tile building
-      if (tile.building.type !== 'grass' && tile.building.type !== 'tree' && tile.building.type !== 'empty' && tile.building.type !== 'road') {
+      // Can only build on grass, trees, or roads
+      // 'empty' tiles are part of existing multi-tile buildings
+      if (tile.building.type !== 'grass' && tile.building.type !== 'tree' && tile.building.type !== 'road') {
         return false;
       }
     }
@@ -1158,18 +1160,24 @@ function canPlaceMultiTileBuilding(
 }
 
 // Footprint helpers for organic growth and merging
-const MERGEABLE_BY_ZONE: Record<ZoneType, Set<BuildingType>> = {
-  residential: new Set<BuildingType>(['grass', 'empty', 'tree', 'house_small', 'house_medium', 'mansion', 'apartment_low', 'apartment_high']),
-  commercial: new Set<BuildingType>(['grass', 'empty', 'tree', 'shop_small', 'shop_medium', 'office_low', 'office_high', 'mall']),
-  industrial: new Set<BuildingType>(['grass', 'empty', 'tree', 'factory_small', 'factory_medium', 'factory_large', 'warehouse']),
-  none: new Set<BuildingType>(['grass', 'empty', 'tree']),
-};
+// IMPORTANT: Only allow consolidation of empty land (grass, empty, tree).
+// Do NOT include actual buildings - this prevents overlapping buildings bug
+// where partial overwrites leave orphaned tiles from other multi-tile buildings.
+const MERGEABLE_TILE_TYPES = new Set<BuildingType>(['grass', 'empty', 'tree']);
 
-function isMergeableZoneTile(tile: Tile, zone: ZoneType): boolean {
+function isMergeableZoneTile(tile: Tile, zone: ZoneType, excludeTile?: { x: number; y: number }): boolean {
+  // The tile being upgraded is always considered mergeable (it's the source of the evolution)
+  if (excludeTile && tile.x === excludeTile.x && tile.y === excludeTile.y) {
+    return tile.zone === zone && !tile.building.onFire && 
+           tile.building.type !== 'water' && tile.building.type !== 'road';
+  }
+  
   if (tile.zone !== zone) return false;
   if (tile.building.onFire) return false;
   if (tile.building.type === 'water' || tile.building.type === 'road') return false;
-  return MERGEABLE_BY_ZONE[zone].has(tile.building.type);
+  // Only allow merging grass, empty (placeholder from multi-tile buildings), and trees
+  // This prevents the overlapping buildings bug where existing buildings get partially overwritten
+  return MERGEABLE_TILE_TYPES.has(tile.building.type);
 }
 
 function footprintAvailable(
@@ -1179,7 +1187,8 @@ function footprintAvailable(
   width: number,
   height: number,
   zone: ZoneType,
-  gridSize: number
+  gridSize: number,
+  excludeTile?: { x: number; y: number }
 ): boolean {
   if (originX < 0 || originY < 0 || originX + width > gridSize || originY + height > gridSize) {
     return false;
@@ -1188,7 +1197,7 @@ function footprintAvailable(
   for (let dy = 0; dy < height; dy++) {
     for (let dx = 0; dx < width; dx++) {
       const tile = grid[originY + dy][originX + dx];
-      if (!isMergeableZoneTile(tile, zone)) {
+      if (!isMergeableZoneTile(tile, zone, excludeTile)) {
         return false;
       }
     }
@@ -1236,10 +1245,12 @@ function findFootprintIncludingTile(
   gridSize: number
 ): { originX: number; originY: number } | null {
   const candidates: { originX: number; originY: number; score: number }[] = [];
+  // The tile at (x, y) is the one being upgraded, so it should be excluded from the "can't merge existing buildings" check
+  const excludeTile = { x, y };
 
   for (let oy = y - (height - 1); oy <= y; oy++) {
     for (let ox = x - (width - 1); ox <= x; ox++) {
-      if (!footprintAvailable(grid, ox, oy, width, height, zone, gridSize)) continue;
+      if (!footprintAvailable(grid, ox, oy, width, height, zone, gridSize, excludeTile)) continue;
       if (x < ox || x >= ox + width || y < oy || y >= oy + height) continue;
 
       const score = scoreFootprint(grid, ox, oy, width, height, gridSize);
@@ -1318,10 +1329,11 @@ export function placeBuilding(
   const newGrid = state.grid.map(row => row.map(t => ({ ...t, building: { ...t.building } })));
 
   if (zone !== null) {
-    // Can't zone over existing buildings (only allow zoning on grass, empty, tree, water, or road)
-    const allowedTypesForZoning: BuildingType[] = ['grass', 'empty', 'tree', 'water', 'road'];
+    // Can't zone over existing buildings (only allow zoning on grass, tree, or road)
+    // NOTE: 'empty' tiles are part of multi-tile buildings, so we can't zone them either
+    const allowedTypesForZoning: BuildingType[] = ['grass', 'tree', 'road'];
     if (!allowedTypesForZoning.includes(tile.building.type)) {
-      return state; // Can't zone over existing building
+      return state; // Can't zone over existing building or part of multi-tile building
     }
     
     // Setting zone
@@ -1340,7 +1352,12 @@ export function placeBuilding(
       }
       applyBuildingFootprint(newGrid, x, y, buildingType, 'none', 1);
     } else {
-      // Single tile building
+      // Single tile building - check if tile is available
+      // Can't place on water, existing buildings, or 'empty' tiles (part of multi-tile buildings)
+      const allowedTypes: BuildingType[] = ['grass', 'tree', 'road'];
+      if (!allowedTypes.includes(tile.building.type)) {
+        return state; // Can't place on existing building or part of multi-tile building
+      }
       newGrid[y][x].building = createBuilding(buildingType);
       newGrid[y][x].zone = 'none';
     }
@@ -1349,15 +1366,88 @@ export function placeBuilding(
   return { ...state, grid: newGrid };
 }
 
-// Bulldoze a tile
+// Find the origin tile of a multi-tile building that contains the given tile
+// Returns null if the tile is not part of a multi-tile building
+function findBuildingOrigin(
+  grid: Tile[][],
+  x: number,
+  y: number,
+  gridSize: number
+): { originX: number; originY: number; buildingType: BuildingType } | null {
+  const tile = grid[y]?.[x];
+  if (!tile) return null;
+  
+  // If this tile has an actual building (not empty), check if it's multi-tile
+  if (tile.building.type !== 'empty' && tile.building.type !== 'grass' && 
+      tile.building.type !== 'water' && tile.building.type !== 'road' && 
+      tile.building.type !== 'tree') {
+    const size = getBuildingSize(tile.building.type);
+    if (size.width > 1 || size.height > 1) {
+      return { originX: x, originY: y, buildingType: tile.building.type };
+    }
+    return null; // Single-tile building
+  }
+  
+  // If this is an 'empty' tile, it might be part of a multi-tile building
+  // Search nearby tiles to find the origin
+  if (tile.building.type === 'empty') {
+    // Check up to 4 tiles away (max building size is 4x4)
+    const maxSize = 4;
+    for (let dy = 0; dy < maxSize; dy++) {
+      for (let dx = 0; dx < maxSize; dx++) {
+        const checkX = x - dx;
+        const checkY = y - dy;
+        if (checkX >= 0 && checkY >= 0 && checkX < gridSize && checkY < gridSize) {
+          const checkTile = grid[checkY][checkX];
+          if (checkTile.building.type !== 'empty' && 
+              checkTile.building.type !== 'grass' &&
+              checkTile.building.type !== 'water' &&
+              checkTile.building.type !== 'road' &&
+              checkTile.building.type !== 'tree') {
+            const size = getBuildingSize(checkTile.building.type);
+            // Check if this building's footprint includes our original tile
+            if (x >= checkX && x < checkX + size.width &&
+                y >= checkY && y < checkY + size.height) {
+              return { originX: checkX, originY: checkY, buildingType: checkTile.building.type };
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  return null;
+}
+
+// Bulldoze a tile (or entire multi-tile building if applicable)
 export function bulldozeTile(state: GameState, x: number, y: number): GameState {
   const tile = state.grid[y]?.[x];
   if (!tile) return state;
   if (tile.building.type === 'water') return state;
 
   const newGrid = state.grid.map(row => row.map(t => ({ ...t, building: { ...t.building } })));
-  newGrid[y][x].building = createBuilding('grass');
-  newGrid[y][x].zone = 'none';
+  
+  // Check if this tile is part of a multi-tile building
+  const origin = findBuildingOrigin(newGrid, x, y, state.gridSize);
+  
+  if (origin) {
+    // Bulldoze the entire multi-tile building
+    const size = getBuildingSize(origin.buildingType);
+    for (let dy = 0; dy < size.height; dy++) {
+      for (let dx = 0; dx < size.width; dx++) {
+        const clearX = origin.originX + dx;
+        const clearY = origin.originY + dy;
+        if (clearX < state.gridSize && clearY < state.gridSize) {
+          newGrid[clearY][clearX].building = createBuilding('grass');
+          newGrid[clearY][clearX].zone = 'none';
+        }
+      }
+    }
+  } else {
+    // Single tile bulldoze
+    newGrid[y][x].building = createBuilding('grass');
+    newGrid[y][x].zone = 'none';
+  }
 
   return { ...state, grid: newGrid };
 }

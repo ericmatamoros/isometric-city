@@ -30,7 +30,7 @@ import {
   BudgetIcon,
   SettingsIcon,
 } from './ui/Icons';
-import { USE_TILE_RENDERER, SPRITE_SHEET, getSpriteCoords, BUILDING_TO_SPRITE } from '@/lib/renderConfig';
+import { USE_TILE_RENDERER, SPRITE_SHEET, getSpriteCoords, BUILDING_TO_SPRITE, SPRITE_VERTICAL_OFFSETS } from '@/lib/renderConfig';
 
 // Import shadcn components
 import { Button } from '@/components/ui/button';
@@ -49,7 +49,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 // Isometric tile dimensions
 const TILE_WIDTH = 64;
-const HEIGHT_RATIO = 0.65;
+const HEIGHT_RATIO = 0.60;
 const TILE_HEIGHT = TILE_WIDTH * HEIGHT_RATIO;
 const KEY_PAN_SPEED = 520; // Pixels per second for keyboard panning
 
@@ -2053,6 +2053,12 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
             // Single-tile sprites also need push (sprites have transparent bottom padding)
             verticalPush = destHeight * 0.15;
           }
+          
+          // Apply per-sprite vertical offset adjustments
+          const spriteKey = BUILDING_TO_SPRITE[buildingType];
+          const extraOffset = (spriteKey && SPRITE_VERTICAL_OFFSETS[spriteKey]) ? SPRITE_VERTICAL_OFFSETS[spriteKey] * h : 0;
+          verticalPush += extraOffset;
+          
           drawY = drawPosY + h - destHeight + verticalPush;
           
           // #region agent log
