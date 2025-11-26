@@ -30,6 +30,8 @@ const SPRITE_DIMENSIONS: Record<string, { width: number; height: number }> = {
   '/assets/buildings/space.png': { width: 1024, height: 1024 },
   '/assets/buildings/trees.png': { width: 1024, height: 1024 },
   '/assets/buildings/house_medium.png': { width: 1024, height: 1024 },
+  '/assets/buildings/shop_medium.png': { width: 2048, height: 2048 },
+  '/assets/buildings/warehouse.png': { width: 2048, height: 2048 },
 };
 
 // Mapping of building types to their PNG image paths and size multipliers
@@ -42,7 +44,7 @@ const BUILDING_IMAGES: Partial<Record<BuildingType, { src: string; tileWidth: nu
   mansion: { src: '/assets/buildings/mansion.png', tileWidth: 1, tileHeight: 1, verticalOffset: 16 },
   // Commercial buildings (1x1)
   shop_small: { src: '/assets/buildings/commercial.png', tileWidth: 1, tileHeight: 1 },
-  shop_medium: { src: '/assets/buildings/commercial.png', tileWidth: 1, tileHeight: 1 },
+  shop_medium: { src: '/assets/buildings/shop_medium.png', tileWidth: 1, tileHeight: 1 },
   office_low: { src: '/assets/buildings/commercial.png', tileWidth: 1, tileHeight: 1 },
   office_high: { src: '/assets/buildings/commercial.png', tileWidth: 1, tileHeight: 1 },
   mall: { src: '/assets/buildings/commercial.png', tileWidth: 1, tileHeight: 1 },
@@ -50,7 +52,7 @@ const BUILDING_IMAGES: Partial<Record<BuildingType, { src: string; tileWidth: nu
   factory_small: { src: '/assets/buildings/industrial.png', tileWidth: 1, tileHeight: 1 },
   factory_medium: { src: '/assets/buildings/industrial.png', tileWidth: 1, tileHeight: 1 },
   factory_large: { src: '/assets/buildings/industrial.png', tileWidth: 1, tileHeight: 1 },
-  warehouse: { src: '/assets/buildings/industrial.png', tileWidth: 1, tileHeight: 1 },
+  warehouse: { src: '/assets/buildings/warehouse.png', tileWidth: 1, tileHeight: 1 },
   // Service buildings (1x1)
   fire_station: { src: '/assets/buildings/fire_station.png', tileWidth: 1, tileHeight: 1 },
   hospital: { src: '/assets/buildings/hospital.png', tileWidth: 1, tileHeight: 1, scale: 0.56, verticalOffset: 15 },
