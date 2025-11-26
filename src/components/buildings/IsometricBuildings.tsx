@@ -60,6 +60,7 @@ const BUILDING_IMAGES: Partial<Record<BuildingType, { src: string; tileWidth: nu
   fire_station: { src: '/assets/buildings/fire_station.png', tileWidth: 1, tileHeight: 1 },
   hospital: { src: '/assets/buildings/hospital.png', tileWidth: 1, tileHeight: 1, scale: 0.56, verticalOffset: 15 },
   park: { src: '/assets/buildings/park.png', tileWidth: 1, tileHeight: 1 },
+  park_large: { src: '/assets/buildings/park_medium.png', tileWidth: 3, tileHeight: 3, scale: 1.3, verticalOffset: -80 },
   tennis: { src: '/assets/buildings/tennis.png', tileWidth: 1, tileHeight: 1, scale: 0.95 },
   police_station: { src: '/assets/buildings/police_station.png', tileWidth: 1, tileHeight: 1 },
   school: { src: '/assets/buildings/school.png', tileWidth: 2, tileHeight: 2 },

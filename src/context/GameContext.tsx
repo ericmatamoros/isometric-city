@@ -48,7 +48,7 @@ const toolBuildingMap: Partial<Record<Tool, BuildingType>> = {
   school: 'school',
   university: 'university',
   park: 'park',
-  park_medium: 'park_medium',
+  park_large: 'park_large',
   tennis: 'tennis',
   power_plant: 'power_plant',
   water_tower: 'water_tower',
@@ -80,6 +80,26 @@ function loadGameState(): GameState | null {
           parsed.stats &&
           parsed.stats.money !== undefined &&
           parsed.stats.population !== undefined) {
+        // Migrate park_medium to park_large
+        let migrated = false;
+        if (parsed.grid) {
+          for (let y = 0; y < parsed.grid.length; y++) {
+            for (let x = 0; x < parsed.grid[y].length; x++) {
+              if (parsed.grid[y][x]?.building?.type === 'park_medium') {
+                parsed.grid[y][x].building.type = 'park_large';
+                migrated = true;
+              }
+            }
+          }
+        }
+        // Migrate selectedTool if it's park_medium
+        if (parsed.selectedTool === 'park_medium') {
+          parsed.selectedTool = 'park_large';
+          migrated = true;
+        }
+        if (migrated) {
+          console.log('Migrated park_medium to park_large in saved game state');
+        }
         console.log('Game state loaded successfully', { 
           gridSize: parsed.gridSize, 
           money: parsed.stats.money,

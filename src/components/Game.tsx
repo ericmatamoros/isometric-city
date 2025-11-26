@@ -207,7 +207,7 @@ const Sidebar = React.memo(function Sidebar() {
     'TOOLS': ['select', 'bulldoze', 'road'] as Tool[],
     'ZONES': ['zone_residential', 'zone_commercial', 'zone_industrial', 'zone_dezone'] as Tool[],
     'SERVICES': ['police_station', 'fire_station', 'hospital', 'school', 'university'] as Tool[],
-    'PARKS': ['park', 'park_medium', 'tennis'] as Tool[],
+    'PARKS': ['park', 'park_large', 'tennis'] as Tool[],
     'UTILITIES': ['power_plant', 'water_tower'] as Tool[],
     'SPECIAL': ['stadium', 'airport', 'space_program'] as Tool[],
   }), []);
@@ -468,7 +468,7 @@ const MiniMap = React.memo(function MiniMap() {
           color = '#c084fc';
         } else if (tile.building.type === 'power_plant') color = '#f97316';
         else if (tile.building.type === 'water_tower') color = '#06b6d4';
-        else if (tile.building.type === 'park' || tile.building.type === 'park_medium' || tile.building.type === 'tennis') color = '#84cc16';
+        else if (tile.building.type === 'park' || tile.building.type === 'park_large' || tile.building.type === 'tennis') color = '#84cc16';
         else if (tile.building.onFire) color = '#ef4444';
         
         ctx.fillStyle = color;
@@ -1077,7 +1077,7 @@ const BUILDING_IMAGES: Record<string, string> = {
   fire_station: '/assets/buildings/fire_station.png',
   hospital: '/assets/buildings/hospital.png',
   park: '/assets/buildings/park.png',
-  park_medium: '/assets/buildings/park.png',
+  park_large: '/assets/buildings/park_medium.png',
   tennis: '/assets/buildings/tennis.png',
   police_station: '/assets/buildings/police_station.png',
   school: '/assets/buildings/school.png',
@@ -1681,7 +1681,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
     let rightColor = '#5a8f4f';
     let strokeColor = '#2d4a26';
     
-    const isPark = tile.building.type === 'park' || tile.building.type === 'park_medium' || tile.building.type === 'tennis';
+    const isPark = tile.building.type === 'park' || tile.building.type === 'park_large' || tile.building.type === 'tennis';
     // Check if this is a building (not grass, empty, water, road, tree, park, or tennis)
     // Also check if it's part of a multi-tile building footprint
     const isDirectBuilding = !isPark &&
@@ -2058,7 +2058,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       else if (buildingType === 'fire_station') sizeMultiplier = 1.006; // Scaled down 10% from 1.118
       else if (buildingType === 'police_station') sizeMultiplier = 1.35; // Scaled down 25% from 1.8
       else if (buildingType === 'park') sizeMultiplier = 1.134; // Scaled down 40% total (30% + 10%) from 1.8
-      else if (buildingType === 'park_medium') sizeMultiplier = 1.45; // Slightly larger for 2x2 medium park
+      else if (buildingType === 'park_large') sizeMultiplier = 2.5; // Scaled up 30% from base, 3x3 large park
       else if (buildingType === 'tennis') sizeMultiplier = 1.197; // Scaled down 5% from 1.26
     }
     
@@ -2265,7 +2265,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
         />
       )}
       
-      {hoveredTile && selectedTool !== 'select' && (
+      {hoveredTile && selectedTool !== 'select' && TOOL_INFO[selectedTool] && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-card/90 border border-border px-4 py-2 rounded-md text-sm">
           {isDragging && dragStartTile && dragEndTile && showsDragGrid ? (
             <>

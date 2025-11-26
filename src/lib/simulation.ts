@@ -641,7 +641,7 @@ function calculateStats(grid: Tile[][], size: number, budget: Budget, taxRate: n
 
       if (building.type === 'tree') treeCount++;
       if (building.type === 'water') waterCount++;
-      if (building.type === 'park' || building.type === 'park_medium') parkCount++;
+      if (building.type === 'park' || building.type === 'park_large') parkCount++;
       if (building.type === 'tennis') parkCount++; // Tennis courts count as parks
     }
   }
@@ -743,7 +743,7 @@ function updateBudgetCosts(grid: Tile[][], budget: Budget): Budget {
         case 'school': schoolCount++; break;
         case 'university': universityCount++; break;
         case 'park': parkCount++; break;
-        case 'park_medium': parkCount++; break;
+        case 'park_large': parkCount++; break;
         case 'tennis': parkCount++; break; // Tennis courts count as parks
         case 'power_plant': powerCount++; break;
         case 'water_tower': waterCount++; break;
@@ -1107,7 +1107,7 @@ const BUILDING_SIZES: Partial<Record<BuildingType, { width: number; height: numb
   university: { width: 3, height: 2 },
   airport: { width: 4, height: 4 },
   space_program: { width: 3, height: 3 },
-  park_medium: { width: 2, height: 2 },
+  park_large: { width: 3, height: 3 },
   mansion: { width: 2, height: 2 },
   apartment_low: { width: 2, height: 2 },
   apartment_high: { width: 2, height: 2 },
@@ -1311,7 +1311,7 @@ export function placeBuilding(
   }
 
   // Can't place parks or tennis courts on roads
-  if ((buildingType === 'park' || buildingType === 'park_medium' || buildingType === 'tennis') && tile.building.type === 'road') {
+  if ((buildingType === 'park' || buildingType === 'park_large' || buildingType === 'tennis') && tile.building.type === 'road') {
     return state;
   }
 
