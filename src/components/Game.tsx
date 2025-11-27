@@ -461,6 +461,8 @@ const HoverSubmenu = React.memo(function HoverSubmenu({
   onSelectTool: (tool: Tool) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const hasSelectedTool = tools.includes(selectedTool);
@@ -469,6 +471,14 @@ const HoverSubmenu = React.memo(function HoverSubmenu({
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
+    }
+    // Calculate position based on button location
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setMenuPosition({
+        top: rect.top,
+        left: rect.right + 4, // 4px gap from sidebar
+      });
     }
     setIsOpen(true);
   }, []);
@@ -496,6 +506,7 @@ const HoverSubmenu = React.memo(function HoverSubmenu({
     >
       {/* Category Header Button */}
       <Button
+        ref={buttonRef}
         variant={hasSelectedTool ? 'default' : 'ghost'}
         className={`w-full justify-between gap-2 px-3 py-2.5 h-auto text-sm group transition-all duration-200 ${
           hasSelectedTool ? 'bg-primary text-primary-foreground' : ''
@@ -515,12 +526,15 @@ const HoverSubmenu = React.memo(function HoverSubmenu({
         </svg>
       </Button>
       
-      {/* Flyout Submenu */}
+      {/* Flyout Submenu - uses fixed positioning to escape all parent containers */}
       {isOpen && (
         <div 
-          className="absolute left-full top-0 ml-1 w-52 bg-sidebar/98 backdrop-blur-sm border border-sidebar-border rounded-md shadow-xl z-50 overflow-hidden animate-submenu-in"
+          className="fixed w-52 bg-sidebar backdrop-blur-sm border border-sidebar-border rounded-md shadow-xl overflow-hidden animate-submenu-in"
           style={{ 
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(96, 165, 250, 0.1)' 
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(96, 165, 250, 0.1)',
+            zIndex: 9999,
+            top: `${menuPosition.top}px`,
+            left: `${menuPosition.left}px`,
           }}
         >
           <div className="px-3 py-2 border-b border-sidebar-border/50 bg-muted/30">
@@ -598,7 +612,7 @@ const Sidebar = React.memo(function Sidebar() {
   ], []);
   
   return (
-    <div className="w-56 bg-sidebar border-r border-sidebar-border flex flex-col h-full">
+    <div className="w-56 bg-sidebar border-r border-sidebar-border flex flex-col h-full relative z-40">
       <div className="px-4 py-4 border-b border-sidebar-border">
         <div className="flex items-center gap-2">
           <span className="text-sidebar-foreground font-bold tracking-tight">ISOCITY</span>
