@@ -301,7 +301,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     animal_pens_farm: -0.25,  // shifted up 0.1 tiles
     cabin_house: -0.2,
     campground: -0.15,
-    marina_docks_small: -0.55,  // 2x2 building, adjusted position
+    marina_docks_small: 0.05,  // 2x2 building, shifted down 0.6 tiles
     pier_large: -0.15,  // 1x1 building now
     roller_coaster_small: -0.35,  // shifted down 0.5
     community_garden: -0.15,
