@@ -6509,9 +6509,9 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
               // Scale factor: 1.2 base (reduced from 1.5 for ~20% smaller)
               // Multi-tile buildings scale with their footprint
               let scaleMultiplier = isMultiTile ? Math.max(buildingSize.width, buildingSize.height) : 1;
-              // Special scale adjustment for airport (scaled up 5%)
+              // Special scale adjustment for airport (no scaling - was scaled up 5%, now scaled down 5%)
               if (buildingType === 'airport') {
-                scaleMultiplier *= 1.05; // Scale up by 5%
+                scaleMultiplier *= 1.0; // Scale down 5% from previous 1.05
               }
               // Special scale adjustment for school (scaled up 5%)
               if (buildingType === 'school') {
