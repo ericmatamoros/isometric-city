@@ -361,12 +361,24 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Simulation loop
+  // Simulation loop - with mobile performance optimization
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | null = null;
 
     if (state.speed > 0) {
-      const interval = state.speed === 1 ? 500 : state.speed === 2 ? 220 : 50;
+      // Check if running on mobile for performance optimization
+      const isMobileDevice = typeof window !== 'undefined' && (
+        window.innerWidth < 768 || 
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+      );
+      
+      // Slower tick intervals on mobile to reduce CPU load
+      // Desktop: 500ms, 220ms, 50ms for speeds 1, 2, 3
+      // Mobile: 750ms, 400ms, 150ms for speeds 1, 2, 3 (50% slower)
+      const interval = isMobileDevice
+        ? (state.speed === 1 ? 750 : state.speed === 2 ? 400 : 150)
+        : (state.speed === 1 ? 500 : state.speed === 2 ? 220 : 50);
+        
       timer = setInterval(() => {
         setState((prev) => simulateTick(prev));
       }, interval);

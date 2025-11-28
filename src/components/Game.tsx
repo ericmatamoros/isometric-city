@@ -2490,7 +2490,9 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     // Speed multiplier: 0 = paused, 1 = normal, 2 = fast (2x), 3 = very fast (4x)
     const speedMultiplier = currentSpeed === 0 ? 0 : currentSpeed === 1 ? 1 : currentSpeed === 2 ? 2.5 : 4;
     
-    const maxCars = Math.min(160, Math.max(16, Math.floor(currentGridSize * 2)));
+    // Reduce max cars on mobile for better performance
+    const baseMaxCars = isMobile ? 25 : 160;
+    const maxCars = Math.min(baseMaxCars, Math.max(isMobile ? 8 : 16, Math.floor(currentGridSize * (isMobile ? 0.4 : 2))));
     carSpawnTimerRef.current -= delta;
     if (carsRef.current.length < maxCars && carSpawnTimerRef.current <= 0) {
       if (spawnRandomCar()) {
@@ -2541,7 +2543,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     }
     
     carsRef.current = updatedCars;
-  }, [spawnRandomCar]);
+  }, [spawnRandomCar, isMobile]);
 
   // Update pedestrians - only when zoomed in enough
   const updatePedestrians = useCallback((delta: number) => {
@@ -2579,19 +2581,26 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
       cachedRoadTileCountRef.current = { count: roadTileCount, gridVersion: currentGridVersion };
     }
     
-    // Spawn many pedestrians - scale with road network size (3 pedestrians per road tile)
-    const maxPedestrians = Math.max(200, roadTileCount * 3);
+    // Spawn pedestrians - scale with road network size, but reduce on mobile
+    // Mobile: max 40 pedestrians, 0.5 per road tile
+    // Desktop: max 200+ pedestrians, 3 per road tile
+    const maxPedestrians = isMobile 
+      ? Math.min(40, Math.max(15, Math.floor(roadTileCount * 0.5)))
+      : Math.max(200, roadTileCount * 3);
     pedestrianSpawnTimerRef.current -= delta;
     if (pedestriansRef.current.length < maxPedestrians && pedestrianSpawnTimerRef.current <= 0) {
-      // Spawn many pedestrians at once
+      // Spawn fewer pedestrians at once on mobile
       let spawnedCount = 0;
-      const spawnBatch = Math.min(50, Math.max(20, Math.floor(roadTileCount / 10)));
+      const spawnBatch = isMobile 
+        ? Math.min(5, Math.max(2, Math.floor(roadTileCount / 30)))
+        : Math.min(50, Math.max(20, Math.floor(roadTileCount / 10)));
       for (let i = 0; i < spawnBatch; i++) {
         if (spawnPedestrian()) {
           spawnedCount++;
         }
       }
-      pedestrianSpawnTimerRef.current = spawnedCount > 0 ? 0.02 : 0.01; // Very fast spawning
+      // Slower spawn rate on mobile
+      pedestrianSpawnTimerRef.current = spawnedCount > 0 ? (isMobile ? 0.2 : 0.02) : (isMobile ? 0.1 : 0.01);
     }
     
     const updatedPedestrians: Pedestrian[] = [];
@@ -2696,7 +2705,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     }
     
     pedestriansRef.current = updatedPedestrians;
-  }, [spawnPedestrian]);
+  }, [spawnPedestrian, isMobile]);
 
   const drawCars = useCallback((ctx: CanvasRenderingContext2D) => {
     const { offset: currentOffset, zoom: currentZoom, grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
@@ -3179,8 +3188,11 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
       return;
     }
 
-    // Calculate max airplanes based on population (1 per 3.5k population, min 18, max 54)
-    const maxAirplanes = Math.min(54, Math.max(18, Math.floor(totalPopulation / 3500) * 3));
+    // Calculate max airplanes based on population
+    // Mobile: max 8 airplanes; Desktop: 1 per 3.5k population, min 18, max 54
+    const maxAirplanes = isMobile 
+      ? Math.min(8, Math.max(3, Math.floor(totalPopulation / 7000)))
+      : Math.min(54, Math.max(18, Math.floor(totalPopulation / 3500) * 3));
     
     // Speed multiplier based on game speed
     const speedMultiplier = currentSpeed === 1 ? 1 : currentSpeed === 2 ? 1.5 : 2;
@@ -3372,7 +3384,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     }
     
     airplanesRef.current = updatedAirplanes;
-  }, [findAirports]);
+  }, [findAirports, isMobile]);
 
   // Draw airplanes with contrails
   const drawAirplanes = useCallback((ctx: CanvasRenderingContext2D) => {
@@ -3547,8 +3559,11 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
       return;
     }
 
-    // Calculate max boats based on number of docks (3 boats per dock, max 25)
-    const maxBoats = Math.min(25, docks.length * 3);
+    // Calculate max boats based on number of docks
+    // Mobile: max 5 boats, 1 per dock; Desktop: max 25, 3 per dock
+    const maxBoats = isMobile 
+      ? Math.min(5, docks.length)
+      : Math.min(25, docks.length * 3);
     
     // Speed multiplier based on game speed
     const speedMultiplier = currentSpeed === 1 ? 1 : currentSpeed === 2 ? 1.5 : 2;
@@ -3820,7 +3835,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     }
     
     boatsRef.current = updatedBoats;
-  }, [findMarinasAndPiers, findAdjacentWaterTile, isOverWater, generateTourWaypoints]);
+  }, [findMarinasAndPiers, findAdjacentWaterTile, isOverWater, generateTourWaypoints, isMobile]);
 
   // Draw boats with wakes
   const drawBoats = useCallback((ctx: CanvasRenderingContext2D) => {
@@ -3970,8 +3985,14 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
   // Update fireworks - spawn, animate, and manage lifecycle
   const updateFireworks = useCallback((delta: number, currentHour: number) => {
     const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed } = worldStateRef.current;
-    
+
     if (!currentGrid || currentGridSize <= 0 || currentSpeed === 0) {
+      return;
+    }
+
+    // Disable fireworks on mobile for performance
+    if (isMobile) {
+      fireworksRef.current = [];
       return;
     }
 
@@ -4158,7 +4179,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     }
     
     fireworksRef.current = updatedFireworks;
-  }, [findFireworkBuildings]);
+  }, [findFireworkBuildings, isMobile]);
 
   // Draw fireworks
   const drawFireworks = useCallback((ctx: CanvasRenderingContext2D) => {
@@ -6320,11 +6341,24 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     
     let animationFrameId: number;
     let lastTime = performance.now();
+    let lastRenderTime = 0;
+    
+    // Target 30fps on mobile (33ms per frame), 60fps on desktop (16ms per frame)
+    const targetFrameTime = isMobile ? 33 : 16;
     
     const render = (time: number) => {
       animationFrameId = requestAnimationFrame(render);
+      
+      // Frame rate limiting for mobile - skip frames to maintain target FPS
+      const timeSinceLastRender = time - lastRenderTime;
+      if (isMobile && timeSinceLastRender < targetFrameTime) {
+        return; // Skip this frame on mobile to reduce CPU load
+      }
+      
       const delta = Math.min((time - lastTime) / 1000, 0.3);
       lastTime = time;
+      lastRenderTime = time;
+      
       if (delta > 0) {
         updateCars(delta);
         spawnCrimeIncidents(delta); // Spawn new crime incidents
@@ -6346,7 +6380,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     
     animationFrameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians, updateAirplanes, drawAirplanes, updateBoats, drawBoats, drawIncidentIndicators, updateFireworks, drawFireworks, hour]);
+  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians, updateAirplanes, drawAirplanes, updateBoats, drawBoats, drawIncidentIndicators, updateFireworks, drawFireworks, hour, isMobile]);
   
   // Day/Night cycle lighting rendering
   useEffect(() => {
@@ -6403,6 +6437,12 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     const alpha = darkness * 0.55; // Maximum 55% darkening at night
     ctx.fillStyle = `rgba(${ambient.r}, ${ambient.g}, ${ambient.b}, ${alpha})`;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // On mobile, use simplified night lighting (just the overlay, no per-tile light cutouts)
+    // This significantly improves performance by avoiding gradient creation for every tile
+    if (isMobile) {
+      return; // Simple flat overlay is enough for mobile
+    }
     
     // Now use destination-out to "cut holes" in the darkness where lights are
     // This creates the effect of lights illuminating through the darkness
@@ -6613,7 +6653,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     ctx.restore();
     ctx.globalCompositeOperation = 'source-over';
     
-  }, [grid, gridSize, hour, offset, zoom, canvasSize.width, canvasSize.height]);
+  }, [grid, gridSize, hour, offset, zoom, canvasSize.width, canvasSize.height, isMobile]);
   
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button === 1 || (e.button === 0 && e.altKey)) {
