@@ -120,6 +120,16 @@ import {
   gridToScreen,
   screenToGrid,
 } from '@/components/game/utils';
+import {
+  drawGreenBaseTile,
+  drawGreyBaseTile,
+  drawBeach,
+} from '@/components/game/drawing';
+import {
+  getOverlayFillStyle,
+  getOverlayForTool,
+} from '@/components/game/overlays';
+import { OverlayModeToggle } from '@/components/game/OverlayModeToggle';
 import { Sidebar } from '@/components/game/Sidebar';
 
 // HEIGHT_RATIO is still used locally in some places
@@ -2491,8 +2501,8 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     const speedMultiplier = currentSpeed === 0 ? 0 : currentSpeed === 1 ? 1 : currentSpeed === 2 ? 2.5 : 4;
     
     // Reduce max cars on mobile for better performance
-    const baseMaxCars = isMobile ? 25 : 160;
-    const maxCars = Math.min(baseMaxCars, Math.max(isMobile ? 8 : 16, Math.floor(currentGridSize * (isMobile ? 0.4 : 2))));
+    const baseMaxCars = 160;
+    const maxCars = Math.min(baseMaxCars, Math.max(16, Math.floor(currentGridSize * (2))));
     carSpawnTimerRef.current -= delta;
     if (carsRef.current.length < maxCars && carSpawnTimerRef.current <= 0) {
       if (spawnRandomCar()) {
@@ -2696,6 +2706,34 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
           const nextTile = ped.path[ped.pathIndex + 1];
           const dir = getDirectionToTile(ped.tileX, ped.tileY, nextTile.x, nextTile.y);
           if (dir) ped.direction = dir;
+        }
+      }
+      
+      // Handle case where pedestrian is already at the last tile with progress >= 1
+      // (can happen when spawned at end of path, or if progress accumulates)
+      if (alive && ped.progress >= 1 && ped.pathIndex >= ped.path.length - 1) {
+        if (!ped.returningHome) {
+          // Arrived at destination - start returning home
+          ped.returningHome = true;
+          const returnPath = findPathOnRoads(currentGrid, currentGridSize, ped.destX, ped.destY, ped.homeX, ped.homeY);
+          if (returnPath && returnPath.length > 0) {
+            ped.path = returnPath;
+            ped.pathIndex = 0;
+            ped.progress = 0;
+            ped.tileX = returnPath[0].x;
+            ped.tileY = returnPath[0].y;
+            // Update direction for return trip
+            if (returnPath.length > 1) {
+              const nextTile = returnPath[1];
+              const dir = getDirectionToTile(returnPath[0].x, returnPath[0].y, nextTile.x, nextTile.y);
+              if (dir) ped.direction = dir;
+            }
+          } else {
+            alive = false;
+          }
+        } else {
+          // Arrived back home - remove pedestrian
+          alive = false;
         }
       }
       
@@ -5385,314 +5423,6 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
       }
     }
     
-    // Draw green base tile for grass/empty tiles (called after water tiles)
-    function drawGreenBaseTile(ctx: CanvasRenderingContext2D, x: number, y: number, tile: Tile, currentZoom: number) {
-      const w = TILE_WIDTH;
-      const h = TILE_HEIGHT;
-      
-      // Determine green base colors based on zone
-      let topColor = '#4a7c3f'; // default grass
-      let leftColor = '#3d6634';
-      let rightColor = '#5a8f4f';
-      let strokeColor = '#2d4a26';
-      
-      if (tile.zone === 'residential') {
-        topColor = '#2d5a2d';
-        leftColor = '#1d4a1d';
-        rightColor = '#3d6a3d';
-        strokeColor = '#22c55e';
-      } else if (tile.zone === 'commercial') {
-        topColor = '#2a4a6a';
-        leftColor = '#1a3a5a';
-        rightColor = '#3a5a7a';
-        strokeColor = '#3b82f6';
-      } else if (tile.zone === 'industrial') {
-        topColor = '#6a4a2a';
-        leftColor = '#5a3a1a';
-        rightColor = '#7a5a3a';
-        strokeColor = '#f59e0b';
-      }
-      
-      // Draw the isometric diamond (top face)
-      ctx.fillStyle = topColor;
-      ctx.beginPath();
-      ctx.moveTo(x + w / 2, y);
-      ctx.lineTo(x + w, y + h / 2);
-      ctx.lineTo(x + w / 2, y + h);
-      ctx.lineTo(x, y + h / 2);
-      ctx.closePath();
-      ctx.fill();
-      
-      // Draw grid lines only when zoomed in (hide when zoom < 0.6)
-      if (currentZoom >= 0.6) {
-        ctx.strokeStyle = strokeColor;
-        ctx.lineWidth = 0.5;
-        ctx.stroke();
-      }
-      
-      // Draw zone border with dashed line (hide when zoomed out, only on grass/empty tiles)
-      if (tile.zone !== 'none' && currentZoom >= 0.95) {
-        ctx.strokeStyle = tile.zone === 'residential' ? '#22c55e' : 
-                          tile.zone === 'commercial' ? '#3b82f6' : '#f59e0b';
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([4, 2]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-    }
-    
-    // Draw gray base tile for buildings (called after water tiles)
-    function drawGreyBaseTile(ctx: CanvasRenderingContext2D, x: number, y: number, tile: Tile, currentZoom: number) {
-      const w = TILE_WIDTH;
-      const h = TILE_HEIGHT;
-      
-      // Grey/concrete base tiles for ALL buildings (except parks)
-      const topColor = '#6b7280';
-      const leftColor = '#4b5563';
-      const rightColor = '#9ca3af';
-      const strokeColor = '#374151';
-      
-      // Draw the isometric diamond (top face)
-      ctx.fillStyle = topColor;
-      ctx.beginPath();
-      ctx.moveTo(x + w / 2, y);
-      ctx.lineTo(x + w, y + h / 2);
-      ctx.lineTo(x + w / 2, y + h);
-      ctx.lineTo(x, y + h / 2);
-      ctx.closePath();
-      ctx.fill();
-      
-      // Draw grid lines only when zoomed in (hide when zoom < 0.6)
-      if (currentZoom >= 0.6) {
-        ctx.strokeStyle = strokeColor;
-        ctx.lineWidth = 0.5;
-        ctx.stroke();
-      }
-    }
-    
-    // Draw beach effect on tiles adjacent to water (sidewalk-style)
-    function drawBeach(ctx: CanvasRenderingContext2D, x: number, y: number, gridX: number, gridY: number) {
-      const w = TILE_WIDTH;
-      const h = TILE_HEIGHT;
-      
-      // Check which edges are adjacent to water (in isometric coordinates)
-      const north = isWater(gridX - 1, gridY);  // top-left edge
-      const east = isWater(gridX, gridY - 1);   // top-right edge
-      const south = isWater(gridX + 1, gridY);  // bottom-right edge
-      const west = isWater(gridX, gridY + 1);   // bottom-left edge
-      
-      // Beach/sidewalk configuration
-      const beachWidth = w * 0.04; // Width of the beach strip (50% thinner)
-      const beachColor = '#d4a574'; // Light sandy/tan color for beach
-      const curbColor = '#b8956a'; // Darker color for curb edge
-      
-      // Diamond corner points
-      const topCorner = { x: x + w / 2, y: y };
-      const rightCorner = { x: x + w, y: y + h / 2 };
-      const bottomCorner = { x: x + w / 2, y: y + h };
-      const leftCorner = { x: x, y: y + h / 2 };
-      
-      // Draw beach strip helper - draws a strip along an edge facing water, optionally shortening at corners
-      const drawBeachEdge = (
-        startX: number, startY: number, 
-        endX: number, endY: number,
-        inwardDx: number, inwardDy: number,
-        shortenStart: boolean = false,
-        shortenEnd: boolean = false
-      ) => {
-        const swWidth = beachWidth;
-        const shortenDist = swWidth * 0.707; // Distance to shorten at corners
-        
-        // Calculate edge direction vector
-        const edgeDx = endX - startX;
-        const edgeDy = endY - startY;
-        const edgeLen = Math.hypot(edgeDx, edgeDy);
-        const edgeDirX = edgeDx / edgeLen;
-        const edgeDirY = edgeDy / edgeLen;
-        
-        // Apply shortening if needed
-        let actualStartX = startX;
-        let actualStartY = startY;
-        let actualEndX = endX;
-        let actualEndY = endY;
-        
-        if (shortenStart && edgeLen > shortenDist * 2) {
-          actualStartX = startX + edgeDirX * shortenDist;
-          actualStartY = startY + edgeDirY * shortenDist;
-        }
-        if (shortenEnd && edgeLen > shortenDist * 2) {
-          actualEndX = endX - edgeDirX * shortenDist;
-          actualEndY = endY - edgeDirY * shortenDist;
-        }
-        
-        // Draw curb (darker line at outer edge)
-        ctx.strokeStyle = curbColor;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(actualStartX, actualStartY);
-        ctx.lineTo(actualEndX, actualEndY);
-        ctx.stroke();
-        
-        // Draw beach fill
-        ctx.fillStyle = beachColor;
-        ctx.beginPath();
-        ctx.moveTo(actualStartX, actualStartY);
-        ctx.lineTo(actualEndX, actualEndY);
-        ctx.lineTo(actualEndX + inwardDx * swWidth, actualEndY + inwardDy * swWidth);
-        ctx.lineTo(actualStartX + inwardDx * swWidth, actualStartY + inwardDy * swWidth);
-        ctx.closePath();
-        ctx.fill();
-      };
-      
-      // North edge beach (top-left edge: leftCorner to topCorner)
-      // Inward direction points toward center-right and down
-      if (north) {
-        const inwardDx = 0.707; // ~45 degrees inward
-        const inwardDy = 0.707;
-        // Shorten at topCorner if east edge also has beach
-        const shortenAtTop = east;
-        // Shorten at leftCorner if west edge also has beach
-        const shortenAtLeft = west;
-        drawBeachEdge(leftCorner.x, leftCorner.y, topCorner.x, topCorner.y, inwardDx, inwardDy, shortenAtLeft, shortenAtTop);
-      }
-      
-      // East edge beach (top-right edge: topCorner to rightCorner)
-      // Inward direction points toward center-left and down
-      if (east) {
-        const inwardDx = -0.707;
-        const inwardDy = 0.707;
-        // Shorten at topCorner if north edge also has beach
-        const shortenAtTop = north;
-        // Shorten at rightCorner if south edge also has beach
-        const shortenAtRight = south;
-        drawBeachEdge(topCorner.x, topCorner.y, rightCorner.x, rightCorner.y, inwardDx, inwardDy, shortenAtTop, shortenAtRight);
-      }
-      
-      // South edge beach (bottom-right edge: rightCorner to bottomCorner)
-      // Inward direction points toward center-left and up
-      if (south) {
-        const inwardDx = -0.707;
-        const inwardDy = -0.707;
-        // Shorten at rightCorner if east edge also has beach
-        const shortenAtRight = east;
-        // Shorten at bottomCorner if west edge also has beach
-        const shortenAtBottom = west;
-        drawBeachEdge(rightCorner.x, rightCorner.y, bottomCorner.x, bottomCorner.y, inwardDx, inwardDy, shortenAtRight, shortenAtBottom);
-      }
-      
-      // West edge beach (bottom-left edge: bottomCorner to leftCorner)
-      // Inward direction points toward center-right and up
-      if (west) {
-        const inwardDx = 0.707;
-        const inwardDy = -0.707;
-        // Shorten at bottomCorner if south edge also has beach
-        const shortenAtBottom = south;
-        // Shorten at leftCorner if north edge also has beach
-        const shortenAtLeft = north;
-        drawBeachEdge(bottomCorner.x, bottomCorner.y, leftCorner.x, leftCorner.y, inwardDx, inwardDy, shortenAtBottom, shortenAtLeft);
-      }
-      
-      // Draw corner beach pieces for adjacent edges that both face water
-      // Corner pieces connect exactly where the shortened edge strips end
-      const bwWidth = beachWidth;
-      const shortenDist = bwWidth * 0.707;
-      ctx.fillStyle = beachColor;
-      
-      // Helper to calculate where a shortened edge's inner endpoint is
-      const getShortenedInnerEndpoint = (
-        cornerX: number, cornerY: number,
-        otherCornerX: number, otherCornerY: number,
-        inwardDx: number, inwardDy: number
-      ) => {
-        // Edge direction FROM otherCorner TO corner (the direction the edge approaches the corner)
-        const edgeDx = cornerX - otherCornerX;
-        const edgeDy = cornerY - otherCornerY;
-        const edgeLen = Math.hypot(edgeDx, edgeDy);
-        const edgeDirX = edgeDx / edgeLen;
-        const edgeDirY = edgeDy / edgeLen;
-        // Shortened outer endpoint (move backwards from corner along edge)
-        const shortenedOuterX = cornerX - edgeDirX * shortenDist;
-        const shortenedOuterY = cornerY - edgeDirY * shortenDist;
-        // Inner endpoint
-        return {
-          x: shortenedOuterX + inwardDx * bwWidth,
-          y: shortenedOuterY + inwardDy * bwWidth
-        };
-      };
-      
-      // Top corner (where north and east edges meet)
-      if (north && east) {
-        const northInner = getShortenedInnerEndpoint(
-          topCorner.x, topCorner.y, leftCorner.x, leftCorner.y,
-          0.707, 0.707
-        );
-        const eastInner = getShortenedInnerEndpoint(
-          topCorner.x, topCorner.y, rightCorner.x, rightCorner.y,
-          -0.707, 0.707
-        );
-        ctx.beginPath();
-        ctx.moveTo(topCorner.x, topCorner.y);
-        ctx.lineTo(northInner.x, northInner.y);
-        ctx.lineTo(eastInner.x, eastInner.y);
-        ctx.closePath();
-        ctx.fill();
-      }
-      
-      // Right corner (where east and south edges meet)
-      if (east && south) {
-        const eastInner = getShortenedInnerEndpoint(
-          rightCorner.x, rightCorner.y, topCorner.x, topCorner.y,
-          -0.707, 0.707
-        );
-        const southInner = getShortenedInnerEndpoint(
-          rightCorner.x, rightCorner.y, bottomCorner.x, bottomCorner.y,
-          -0.707, -0.707
-        );
-        ctx.beginPath();
-        ctx.moveTo(rightCorner.x, rightCorner.y);
-        ctx.lineTo(eastInner.x, eastInner.y);
-        ctx.lineTo(southInner.x, southInner.y);
-        ctx.closePath();
-        ctx.fill();
-      }
-      
-      // Bottom corner (where south and west edges meet)
-      if (south && west) {
-        const southInner = getShortenedInnerEndpoint(
-          bottomCorner.x, bottomCorner.y, rightCorner.x, rightCorner.y,
-          -0.707, -0.707
-        );
-        const westInner = getShortenedInnerEndpoint(
-          bottomCorner.x, bottomCorner.y, leftCorner.x, leftCorner.y,
-          0.707, -0.707
-        );
-        ctx.beginPath();
-        ctx.moveTo(bottomCorner.x, bottomCorner.y);
-        ctx.lineTo(southInner.x, southInner.y);
-        ctx.lineTo(westInner.x, westInner.y);
-        ctx.closePath();
-        ctx.fill();
-      }
-      
-      // Left corner (where west and north edges meet)
-      if (west && north) {
-        const westInner = getShortenedInnerEndpoint(
-          leftCorner.x, leftCorner.y, bottomCorner.x, bottomCorner.y,
-          0.707, -0.707
-        );
-        const northInner = getShortenedInnerEndpoint(
-          leftCorner.x, leftCorner.y, topCorner.x, topCorner.y,
-          0.707, 0.707
-        );
-        ctx.beginPath();
-        ctx.moveTo(leftCorner.x, leftCorner.y);
-        ctx.lineTo(westInner.x, westInner.y);
-        ctx.lineTo(northInner.x, northInner.y);
-        ctx.closePath();
-        ctx.fill();
-      }
-    }
-    
     // Draw building sprite
     function drawBuilding(ctx: CanvasRenderingContext2D, x: number, y: number, tile: Tile) {
       const buildingType = tile.building.type;
@@ -6231,7 +5961,14 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     beachQueue
       .sort((a, b) => a.depth - b.depth)
       .forEach(({ tile, screenX, screenY }) => {
-        drawBeach(ctx, screenX, screenY, tile.x, tile.y);
+        // Compute water adjacency for each edge
+        const adjacentWater = {
+          north: isWater(tile.x - 1, tile.y),
+          east: isWater(tile.x, tile.y - 1),
+          south: isWater(tile.x + 1, tile.y),
+          west: isWater(tile.x, tile.y + 1),
+        };
+        drawBeach(ctx, screenX, screenY, adjacentWater);
       });
     
     
@@ -6244,44 +5981,15 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     
     // Draw overlays last so they remain visible on top of buildings
     overlayQueue.forEach(({ tile, screenX, screenY }) => {
-      let fillStyle: string;
+      // Get service coverage for this tile
+      const coverage = {
+        fire: state.services.fire[tile.y][tile.x],
+        police: state.services.police[tile.y][tile.x],
+        health: state.services.health[tile.y][tile.x],
+        education: state.services.education[tile.y][tile.x],
+      };
       
-      if (overlayMode === 'power') {
-        fillStyle = tile.building.powered ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)';
-      } else if (overlayMode === 'water') {
-        fillStyle = tile.building.watered ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)';
-      } else if (overlayMode === 'fire') {
-        const coverage = state.services.fire[tile.y][tile.x];
-        // Red gradient: darker red = better coverage, lighter red = poor coverage
-        const intensity = coverage / 100;
-        fillStyle = `rgba(239, ${68 + Math.floor(intensity * 100)}, ${68 + Math.floor(intensity * 100)}, ${0.3 + intensity * 0.4})`;
-      } else if (overlayMode === 'police') {
-        const coverage = state.services.police[tile.y][tile.x];
-        // Blue gradient: darker blue = better coverage, lighter blue = poor coverage
-        const intensity = coverage / 100;
-        fillStyle = `rgba(${59 + Math.floor(intensity * 100)}, ${130 + Math.floor(intensity * 100)}, ${246 - Math.floor(intensity * 50)}, ${0.3 + intensity * 0.4})`;
-      } else if (overlayMode === 'health') {
-        const coverage = state.services.health[tile.y][tile.x];
-        // Green gradient: darker green = better coverage, lighter green = poor coverage
-        const intensity = coverage / 100;
-        fillStyle = `rgba(${34 + Math.floor(intensity * 100)}, ${197 - Math.floor(intensity * 50)}, ${94 + Math.floor(intensity * 50)}, ${0.3 + intensity * 0.4})`;
-      } else if (overlayMode === 'education') {
-        const coverage = state.services.education[tile.y][tile.x];
-        // Purple gradient: darker purple = better coverage, lighter purple = poor coverage
-        const intensity = coverage / 100;
-        fillStyle = `rgba(${147 + Math.floor(intensity * 50)}, ${51 + Math.floor(intensity * 100)}, ${234 - Math.floor(intensity * 50)}, ${0.3 + intensity * 0.4})`;
-      } else if (overlayMode === 'subway') {
-        // Underground view overlay - darker tint to simulate underground, bright amber for subway lines
-        if (tile.hasSubway) {
-          fillStyle = 'rgba(245, 158, 11, 0.7)'; // Bright amber for existing subway
-        } else {
-          fillStyle = 'rgba(40, 30, 20, 0.4)'; // Dark brown tint for "underground" view
-        }
-      } else {
-        fillStyle = 'rgba(128, 128, 128, 0.4)';
-      }
-      
-      ctx.fillStyle = fillStyle;
+      ctx.fillStyle = getOverlayFillStyle(overlayMode, tile, coverage);
       ctx.beginPath();
       ctx.moveTo(screenX + TILE_WIDTH / 2, screenY);
       ctx.lineTo(screenX + TILE_WIDTH, screenY + TILE_HEIGHT / 2);
@@ -7274,104 +6982,6 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
   );
 }
 
-// Overlay Mode Toggle
-const OverlayModeToggle = React.memo(function OverlayModeToggle({ 
-  overlayMode, 
-  setOverlayMode 
-}: { 
-  overlayMode: OverlayMode; 
-  setOverlayMode: (mode: OverlayMode) => void;
-}) {
-  return (
-    <Card className="absolute bottom-4 left-4 p-2 shadow-lg bg-card/90 border-border/70 z-50">
-      <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-semibold mb-2">
-        View Overlay
-      </div>
-      <div className="flex gap-1">
-        <Button
-          variant={overlayMode === 'none' ? 'default' : 'ghost'}
-          size="sm"
-          onClick={() => setOverlayMode('none')}
-          className="h-8 px-3"
-          title="No Overlay"
-        >
-          <CloseIcon size={14} />
-        </Button>
-        
-        <Button
-          variant={overlayMode === 'power' ? 'default' : 'ghost'}
-          size="sm"
-          onClick={() => setOverlayMode('power')}
-          className={`h-8 px-3 ${overlayMode === 'power' ? 'bg-amber-500 hover:bg-amber-600' : ''}`}
-          title="Power Grid"
-        >
-          <PowerIcon size={14} />
-        </Button>
-        
-        <Button
-          variant={overlayMode === 'water' ? 'default' : 'ghost'}
-          size="sm"
-          onClick={() => setOverlayMode('water')}
-          className={`h-8 px-3 ${overlayMode === 'water' ? 'bg-blue-500 hover:bg-blue-600' : ''}`}
-          title="Water System"
-        >
-          <WaterIcon size={14} />
-        </Button>
-        
-        <Button
-          variant={overlayMode === 'fire' ? 'default' : 'ghost'}
-          size="sm"
-          onClick={() => setOverlayMode('fire')}
-          className={`h-8 px-3 ${overlayMode === 'fire' ? 'bg-red-500 hover:bg-red-600' : ''}`}
-          title="Fire Coverage"
-        >
-          <FireIcon size={14} />
-        </Button>
-        
-        <Button
-          variant={overlayMode === 'police' ? 'default' : 'ghost'}
-          size="sm"
-          onClick={() => setOverlayMode('police')}
-          className={`h-8 px-3 ${overlayMode === 'police' ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
-          title="Police Coverage"
-        >
-          <SafetyIcon size={14} />
-        </Button>
-        
-        <Button
-          variant={overlayMode === 'health' ? 'default' : 'ghost'}
-          size="sm"
-          onClick={() => setOverlayMode('health')}
-          className={`h-8 px-3 ${overlayMode === 'health' ? 'bg-green-500 hover:bg-green-600' : ''}`}
-          title="Health Coverage"
-        >
-          <HealthIcon size={14} />
-        </Button>
-        
-        <Button
-          variant={overlayMode === 'education' ? 'default' : 'ghost'}
-          size="sm"
-          onClick={() => setOverlayMode('education')}
-          className={`h-8 px-3 ${overlayMode === 'education' ? 'bg-purple-500 hover:bg-purple-600' : ''}`}
-          title="Education Coverage"
-        >
-          <EducationIcon size={14} />
-        </Button>
-        
-        <Button
-          variant={overlayMode === 'subway' ? 'default' : 'ghost'}
-          size="sm"
-          onClick={() => setOverlayMode('subway')}
-          className={`h-8 px-3 ${overlayMode === 'subway' ? 'bg-yellow-500 hover:bg-yellow-600' : ''}`}
-          title="Subway Coverage"
-        >
-          <SubwayIcon size={14} />
-        </Button>
-      </div>
-    </Card>
-  );
-});
-
 export default function Game() {
   const { state, setTool, setActivePanel, addMoney, addNotification } = useGame();
   const [overlayMode, setOverlayMode] = useState<OverlayMode>('none');
@@ -7448,23 +7058,7 @@ export default function Game() {
     previousSelectedToolRef.current = state.selectedTool;
     
     setTimeout(() => {
-      if (state.selectedTool === 'power_plant') {
-        setOverlayMode('power');
-      } else if (state.selectedTool === 'water_tower') {
-        setOverlayMode('water');
-      } else if (state.selectedTool === 'fire_station') {
-        setOverlayMode('fire');
-      } else if (state.selectedTool === 'police_station') {
-        setOverlayMode('police');
-      } else if (state.selectedTool === 'hospital') {
-        setOverlayMode('health');
-      } else if (state.selectedTool === 'school' || state.selectedTool === 'university') {
-        setOverlayMode('education');
-      } else if (state.selectedTool === 'subway_station') {
-        setOverlayMode('subway');
-      } else {
-        setOverlayMode('none');
-      }
+      setOverlayMode(getOverlayForTool(state.selectedTool));
     }, 0);
   }, [state.selectedTool]);
   

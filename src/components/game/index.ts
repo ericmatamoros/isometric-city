@@ -2,4 +2,7 @@
 export * from './types';
 export * from './constants';
 export * from './utils';
+export * from './drawing';
+export * from './overlays';
 export { Sidebar } from './Sidebar';
+export { OverlayModeToggle } from './OverlayModeToggle';
