@@ -350,6 +350,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     updatePedestrians,
     drawCars,
     drawPedestrians,
+    drawRecreationPedestrians,
     drawEmergencyVehicles,
     drawIncidentIndicators,
   } = useVehicleSystems(vehicleSystemRefs, vehicleSystemState);
@@ -3604,19 +3605,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           drawBuilding(buildingsCtx, screenX, screenY, tile);
         });
         
-        // Draw recreation pedestrians ON TOP of buildings (parks, etc.)
-        // These need to be drawn here so they appear above park sprites
-        if (zoom >= PEDESTRIAN_MIN_ZOOM && pedestriansRef.current.length > 0) {
-          const viewWidth = canvasSize.width / (dpr * zoom);
-          const viewHeight = canvasSize.height / (dpr * zoom);
-          const pedestrianViewBounds = {
-            viewLeft: -offset.x / zoom - TILE_WIDTH,
-            viewTop: -offset.y / zoom - TILE_HEIGHT * 2,
-            viewRight: viewWidth - offset.x / zoom + TILE_WIDTH,
-            viewBottom: viewHeight - offset.y / zoom + TILE_HEIGHT * 2,
-          };
-          drawPedestriansUtil(buildingsCtx, pedestriansRef.current, pedestrianViewBounds, zoom, 'recreation');
-        }
+        // NOTE: Recreation pedestrians are now drawn in the animation loop on the air canvas
+        // so their animations are smooth (the buildings canvas only updates when grid changes)
         
         buildingsCtx.setTransform(1, 0, 0, 1, 0, 0);
       }
@@ -3828,6 +3818,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         drawEmergencyVehicles(ctx); // Draw emergency vehicles!
         drawIncidentIndicators(ctx, delta); // Draw fire/crime incident indicators!
         clearAirCanvas();
+        
+        // Draw recreation pedestrians on air canvas (above buildings, smooth animation)
+        drawRecreationPedestrians(airCtx);
+        
         drawHelicopters(airCtx); // Draw helicopters (below planes, above buildings)
         drawAirplanes(airCtx); // Draw airplanes above everything
         drawFireworks(airCtx); // Draw fireworks above everything (nighttime only)
@@ -3836,7 +3830,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     
     animationFrameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians, updateAirplanes, drawAirplanes, updateHelicopters, drawHelicopters, updateBoats, drawBoats, updateTrains, drawTrainsCallback, drawIncidentIndicators, updateFireworks, drawFireworks, updateSmog, drawSmog, visualHour, isMobile]);
+  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians, drawRecreationPedestrians, updateAirplanes, drawAirplanes, updateHelicopters, drawHelicopters, updateBoats, drawBoats, updateTrains, drawTrainsCallback, drawIncidentIndicators, updateFireworks, drawFireworks, updateSmog, drawSmog, visualHour, isMobile]);
   
   // Day/Night cycle lighting rendering - optimized for performance
   useEffect(() => {

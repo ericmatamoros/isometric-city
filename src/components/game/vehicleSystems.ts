@@ -983,8 +983,41 @@ export function useVehicleSystems(
     };
     
     // Pass zoom level for LOD (Level of Detail) rendering
-    // Only draw non-recreation pedestrians here (recreation pedestrians are drawn on buildings canvas)
+    // Only draw non-recreation pedestrians here (recreation pedestrians are drawn on air canvas)
     drawPedestriansUtil(ctx, pedestriansRef.current, viewBounds, currentZoom, 'non-recreation');
+    
+    ctx.restore();
+  }, [worldStateRef, pedestriansRef]);
+
+  // Draw recreation pedestrians on air canvas (above buildings, smooth animation every frame)
+  const drawRecreationPedestrians = useCallback((ctx: CanvasRenderingContext2D) => {
+    const { offset: currentOffset, zoom: currentZoom, grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
+    const canvas = ctx.canvas;
+    const dpr = window.devicePixelRatio || 1;
+    
+    if (currentZoom < PEDESTRIAN_MIN_ZOOM) {
+      return;
+    }
+    
+    if (!currentGrid || currentGridSize <= 0 || pedestriansRef.current.length === 0) {
+      return;
+    }
+    
+    ctx.save();
+    ctx.scale(dpr * currentZoom, dpr * currentZoom);
+    ctx.translate(currentOffset.x / currentZoom, currentOffset.y / currentZoom);
+    
+    const viewWidth = canvas.width / (dpr * currentZoom);
+    const viewHeight = canvas.height / (dpr * currentZoom);
+    const viewBounds = {
+      viewLeft: -currentOffset.x / currentZoom - TILE_WIDTH,
+      viewTop: -currentOffset.y / currentZoom - TILE_HEIGHT * 2,
+      viewRight: viewWidth - currentOffset.x / currentZoom + TILE_WIDTH,
+      viewBottom: viewHeight - currentOffset.y / currentZoom + TILE_HEIGHT * 2,
+    };
+    
+    // Draw only recreation pedestrians (at parks, sports facilities, etc.)
+    drawPedestriansUtil(ctx, pedestriansRef.current, viewBounds, currentZoom, 'recreation');
     
     ctx.restore();
   }, [worldStateRef, pedestriansRef]);
@@ -1262,6 +1295,7 @@ export function useVehicleSystems(
     updatePedestrians,
     drawCars,
     drawPedestrians,
+    drawRecreationPedestrians,
     drawEmergencyVehicles,
     drawIncidentIndicators,
   };

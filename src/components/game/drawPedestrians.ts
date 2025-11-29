@@ -355,8 +355,8 @@ function drawDogSimple(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
  */
 function drawBasketballPlayer(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
   const scale = 0.32;
-  const bounce = Math.abs(Math.sin(ped.activityAnimTimer * 3)) * 2;
-  const armMove = Math.sin(ped.activityAnimTimer * 6) * 4;
+  const bounce = Math.abs(Math.sin(ped.activityAnimTimer * 1.5)) * 2;
+  const armMove = Math.sin(ped.activityAnimTimer * 3) * 4;
 
   // Head
   ctx.fillStyle = ped.skinColor;
@@ -416,7 +416,7 @@ function drawBasketballPlayer(ctx: CanvasRenderingContext2D, ped: Pedestrian): v
  */
 function drawTennisPlayer(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
   const scale = 0.31;
-  const swing = Math.sin(ped.activityAnimTimer * 2) * 5;
+  const swing = Math.sin(ped.activityAnimTimer * 1) * 5;
 
   // Head
   ctx.fillStyle = ped.skinColor;
@@ -486,8 +486,8 @@ function drawTennisPlayer(ctx: CanvasRenderingContext2D, ped: Pedestrian): void 
  */
 function drawSoccerPlayer(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
   const scale = 0.31;
-  const kick = Math.sin(ped.activityAnimTimer * 4) * 4;
-  const run = Math.abs(Math.sin(ped.activityAnimTimer * 5));
+  const kick = Math.sin(ped.activityAnimTimer * 2) * 4;
+  const run = Math.abs(Math.sin(ped.activityAnimTimer * 2.5));
 
   // Head
   ctx.fillStyle = ped.skinColor;
@@ -547,7 +547,7 @@ function drawSoccerPlayer(ctx: CanvasRenderingContext2D, ped: Pedestrian): void 
  */
 function drawBaseballPlayer(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
   const scale = 0.31;
-  const swing = Math.sin(ped.activityAnimTimer * 2) * 6;
+  const swing = Math.sin(ped.activityAnimTimer * 1) * 6;
 
   // Head
   ctx.fillStyle = ped.skinColor;
@@ -611,8 +611,8 @@ function drawBaseballPlayer(ctx: CanvasRenderingContext2D, ped: Pedestrian): voi
  */
 function drawSwimmer(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
   const scale = 0.30;
-  const swim = Math.sin(ped.activityAnimTimer * 4);
-  const bob = Math.sin(ped.activityAnimTimer * 2) * 1.5;
+  const swim = Math.sin(ped.activityAnimTimer * 2);
+  const bob = Math.sin(ped.activityAnimTimer * 1) * 1.5;
 
   // Water effect around swimmer
   ctx.fillStyle = 'rgba(59, 130, 246, 0.3)';
@@ -663,7 +663,7 @@ function drawSwimmer(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
  */
 function drawSkateboarder(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
   const scale = 0.31;
-  const ride = Math.sin(ped.activityAnimTimer * 3);
+  const ride = Math.sin(ped.activityAnimTimer * 1.5);
   const bob = Math.abs(ride) * 1.5;
 
   // Skateboard
@@ -906,8 +906,8 @@ function drawDogWalker(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
  */
 function drawPlaygroundKid(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
   const scale = 0.27; // Smaller - it's a kid
-  const swing = Math.sin(ped.activityAnimTimer * 3) * 8;
-  const sway = Math.cos(ped.activityAnimTimer * 3) * 3;
+  const swing = Math.sin(ped.activityAnimTimer * 1.5) * 8;
+  const sway = Math.cos(ped.activityAnimTimer * 1.5) * 3;
 
   // Swing set hint
   ctx.strokeStyle = '#666666';
@@ -963,7 +963,7 @@ function drawPlaygroundKid(ctx: CanvasRenderingContext2D, ped: Pedestrian): void
  */
 function drawSpectator(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
   const scale = 0.30;
-  const cheer = Math.sin(ped.activityAnimTimer * 4);
+  const cheer = Math.sin(ped.activityAnimTimer * 2);
   const cheerUp = cheer > 0.7;
 
   // Head
@@ -1031,7 +1031,7 @@ function drawSpectator(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
  */
 function drawSocializingPerson(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
   const scale = 0.30;
-  const gesture = Math.sin(ped.activityAnimTimer * 2) * 2;
+  const gesture = Math.sin(ped.activityAnimTimer * 1) * 2;
 
   // Head
   ctx.fillStyle = ped.skinColor;
@@ -1070,7 +1070,7 @@ function drawSocializingPerson(ctx: CanvasRenderingContext2D, ped: Pedestrian): 
   ctx.stroke();
 
   // Speech indicator (small dots)
-  if (Math.sin(ped.activityAnimTimer * 5) > 0) {
+  if (Math.sin(ped.activityAnimTimer * 2.5) > 0) {
     ctx.fillStyle = '#666666';
     ctx.beginPath();
     ctx.arc(5 * scale, -14 * scale, 0.8 * scale, 0, Math.PI * 2);

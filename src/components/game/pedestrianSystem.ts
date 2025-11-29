@@ -144,13 +144,13 @@ export function canPedestrianEnterBuilding(buildingType: BuildingType): boolean 
 
 /**
  * Generate random activity position offset within a tile
- * Uses very small range to keep pedestrians well within tile bounds
+ * Spread pedestrians out within the tile bounds
  */
 export function getRandomActivityOffset(): { x: number; y: number } {
-  // Very small random offset to add slight variation without going outside tile
+  // Random offset to spread pedestrians within tile (stays inside diamond)
   return {
-    x: (Math.random() - 0.5) * 8,
-    y: (Math.random() - 0.5) * 4,
+    x: (Math.random() - 0.5) * 20,
+    y: (Math.random() - 0.5) * 10,
   };
 }
 
