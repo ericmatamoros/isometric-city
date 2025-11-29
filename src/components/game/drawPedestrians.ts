@@ -74,12 +74,12 @@ export function drawPedestrians(
       pedY = centerY + meta.vec.dy * ped.progress + meta.normal.ny * sidewalkOffset;
     }
 
-    // Viewport culling
+    // Viewport culling - be generous to avoid cutting off activities
     if (
-      pedX < viewBounds.viewLeft - 20 ||
-      pedX > viewBounds.viewRight + 20 ||
-      pedY < viewBounds.viewTop - 30 ||
-      pedY > viewBounds.viewBottom + 30
+      pedX < viewBounds.viewLeft - 50 ||
+      pedX > viewBounds.viewRight + 50 ||
+      pedY < viewBounds.viewTop - 60 ||
+      pedY > viewBounds.viewBottom + 60
     ) {
       continue;
     }

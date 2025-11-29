@@ -843,12 +843,12 @@ export function useVehicleSystems(
       cachedRoadTileCountRef.current = { count: roadTileCount, gridVersion: currentGridVersion };
     }
     
-    // OPTIMIZED: Use hard cap and slower spawn rate
-    const maxPedestrians = Math.min(PEDESTRIAN_MAX_COUNT, Math.max(50, roadTileCount));
+    // Scale pedestrian count with city size (road tiles), with a reasonable cap
+    const maxPedestrians = Math.min(PEDESTRIAN_MAX_COUNT, Math.max(100, roadTileCount * 2));
     pedestrianSpawnTimerRef.current -= delta;
     
     if (pedestriansRef.current.length < maxPedestrians && pedestrianSpawnTimerRef.current <= 0) {
-      // Spawn fewer pedestrians at a time
+      // Spawn pedestrians in batches
       const spawnBatch = Math.min(PEDESTRIAN_SPAWN_BATCH_SIZE, maxPedestrians - pedestriansRef.current.length);
       for (let i = 0; i < spawnBatch; i++) {
         spawnPedestrian();
