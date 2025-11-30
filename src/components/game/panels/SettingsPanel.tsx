@@ -557,6 +557,17 @@ export function SettingsPanel() {
               Load Example State 8
             </Button>
             <Button
+              variant="outline"
+              className="w-full mt-2"
+              onClick={async () => {
+                const { default: exampleState9 } = await import('@/resources/example_state_9.json');
+                loadState(JSON.stringify(exampleState9));
+                setActivePanel('none');
+              }}
+            >
+              Load Example State 9
+            </Button>
+            <Button
               variant="default"
               className="w-full mt-4"
               onClick={() => {
