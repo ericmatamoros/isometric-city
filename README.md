@@ -23,43 +23,6 @@ IsoCity is a open-source isometric city-building simulation game built with **Ne
 -   **Graphics**: HTML5 Canvas API (No external game engine libraries; pure native implementation).
 -   **Icons**: Lucide React.
 
-## 📂 Project Structure
-
-The project follows a modular architecture separating the rendering engine, simulation logic, and UI components.
-
-```
-isocity/
-├── public/                 # Static assets (sprites, textures, icons)
-│   └── assets/             # Game assets (buildings, vehicles, terrain)
-├── src/
-│   ├── app/                # Next.js App Router pages and layouts
-│   ├── components/
-│   │   ├── game/           # CORE GAME ENGINE
-│   │   │   ├── systems/    # (Conceptually grouped logic files)
-│   │   │   │   ├── trafficSystem.ts    # Car movement logic
-│   │   │   │   ├── pedestrianSystem.ts # Crowd logic
-│   │   │   │   ├── railSystem.ts       # Trains and trams
-│   │   │   │   └── aircraftSystems.ts  # Planes and airport logic
-│   │   │   ├── CanvasIsometricGrid.tsx # Main rendering component
-│   │   │   ├── drawing.ts              # Canvas drawing helpers
-│   │   │   └── gridFinders.ts          # Pathfinding and grid utilities
-│   │   ├── ui/             # Reusable UI components (Buttons, Dialogs, etc.)
-│   │   └── buildings/      # Building-specific React components
-│   ├── context/            # Global state (GameContext)
-│   ├── lib/
-│   │   ├── simulation.ts   # Core simulation loop and state updates
-│   │   └── utils.ts        # Helper functions
-│   ├── hooks/              # Custom React hooks (useCheatCodes, useMobile)
-│   └── types/              # TypeScript definitions
-└── ...
-```
-
-### Key Directories Explained
-
--   **`src/components/game/`**: This is where the magic happens. It contains the logic for drawing the isometric grid, handling user input on the canvas, and the various sub-systems that control the city's life (traffic, weather, overlays).
--   **`src/lib/simulation.ts`**: Handles the underlying mathematical model of the city—calculating population growth, tax income, and resource consumption independent of the visual layer.
--   **`src/resources/`**: Contains example save states (`example_state.json`) useful for testing or initializing the game with a pre-built city.
-
 ## Getting Started
 
 ### Prerequisites
