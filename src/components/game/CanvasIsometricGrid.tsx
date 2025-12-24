@@ -55,7 +55,12 @@ import {
 } from '@/components/game/drawing';
 import {
   getOverlayFillStyle,
+  OVERLAY_TO_BUILDING_TYPES,
+  OVERLAY_CIRCLE_COLORS,
+  OVERLAY_CIRCLE_FILL_COLORS,
+  OVERLAY_HIGHLIGHT_COLORS,
 } from '@/components/game/overlays';
+import { SERVICE_CONFIG } from '@/lib/simulation';
 import { drawPlaceholderBuilding } from '@/components/game/placeholders';
 import { loadImage, loadSpriteImage, onImageLoaded, getCachedImage } from '@/components/game/imageLoader';
 import { TileInfoPanel } from '@/components/game/panels';
@@ -2898,14 +2903,87 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
             education: state.services.education[tile.y][tile.x],
           };
           
-          buildingsCtx.fillStyle = getOverlayFillStyle(overlayMode, tile, coverage);
-          buildingsCtx.beginPath();
-          buildingsCtx.moveTo(screenX + halfTileWidth, screenY);
-          buildingsCtx.lineTo(screenX + tileWidth, screenY + halfTileHeight);
-          buildingsCtx.lineTo(screenX + halfTileWidth, screenY + tileHeight);
-          buildingsCtx.lineTo(screenX, screenY + halfTileHeight);
-          buildingsCtx.closePath();
-          buildingsCtx.fill();
+          const fillStyle = getOverlayFillStyle(overlayMode, tile, coverage);
+          // Only draw if there's actually a color to show
+          if (fillStyle !== 'rgba(0, 0, 0, 0)') {
+            buildingsCtx.fillStyle = fillStyle;
+            buildingsCtx.beginPath();
+            buildingsCtx.moveTo(screenX + halfTileWidth, screenY);
+            buildingsCtx.lineTo(screenX + tileWidth, screenY + halfTileHeight);
+            buildingsCtx.lineTo(screenX + halfTileWidth, screenY + tileHeight);
+            buildingsCtx.lineTo(screenX, screenY + halfTileHeight);
+            buildingsCtx.closePath();
+            buildingsCtx.fill();
+          }
+        }
+        
+        // Draw service radius circles and building highlights for the active overlay
+        if (overlayMode !== 'none' && overlayMode !== 'subway') {
+          const serviceBuildingTypes = OVERLAY_TO_BUILDING_TYPES[overlayMode];
+          const circleColor = OVERLAY_CIRCLE_COLORS[overlayMode];
+          const circleFillColor = OVERLAY_CIRCLE_FILL_COLORS[overlayMode];
+          const highlightColor = OVERLAY_HIGHLIGHT_COLORS[overlayMode];
+          
+          // Find all service buildings of this type and draw their radii
+          for (let y = 0; y < gridSize; y++) {
+            for (let x = 0; x < gridSize; x++) {
+              const tile = grid[y][x];
+              if (!serviceBuildingTypes.includes(tile.building.type)) continue;
+              
+              // Skip buildings under construction
+              if (tile.building.constructionProgress !== undefined && tile.building.constructionProgress < 100) continue;
+              
+              // Skip abandoned buildings (they don't provide coverage in simulation)
+              if (tile.building.abandoned) continue;
+              
+              // Get service config for this building type
+              const config = SERVICE_CONFIG[tile.building.type as keyof typeof SERVICE_CONFIG];
+              if (!config || !('range' in config)) continue;
+              
+              const range = config.range;
+              
+              // NOTE: For multi-tile service buildings (e.g. 2x2 hospital, 3x3 university),
+              // coverage is computed from the building's anchor tile (top-left of footprint)
+              // in the simulation. We center the radius on that same tile to keep the
+              // overlay consistent with actual service coverage.
+              const { screenX: bldgScreenX, screenY: bldgScreenY } = gridToScreen(x, y, 0, 0);
+              const centerX = bldgScreenX + halfTileWidth;
+              const centerY = bldgScreenY + halfTileHeight;
+              
+              // Draw isometric ellipse for the radius
+              // In isometric view, a circle becomes an ellipse
+              // The radius in tiles needs to be converted to screen pixels
+              const radiusX = range * halfTileWidth;
+              const radiusY = range * halfTileHeight;
+              
+              buildingsCtx.strokeStyle = circleColor;
+              buildingsCtx.lineWidth = 2 / zoom; // Keep line width consistent at different zoom levels
+              buildingsCtx.beginPath();
+              buildingsCtx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
+              buildingsCtx.stroke();
+              
+              // Draw a subtle filled ellipse for better visibility
+              buildingsCtx.fillStyle = circleFillColor;
+              buildingsCtx.fill();
+              
+              // Draw highlight glow around the service building
+              buildingsCtx.strokeStyle = highlightColor;
+              buildingsCtx.lineWidth = 3 / zoom;
+              buildingsCtx.beginPath();
+              buildingsCtx.moveTo(bldgScreenX + halfTileWidth, bldgScreenY);
+              buildingsCtx.lineTo(bldgScreenX + tileWidth, bldgScreenY + halfTileHeight);
+              buildingsCtx.lineTo(bldgScreenX + halfTileWidth, bldgScreenY + tileHeight);
+              buildingsCtx.lineTo(bldgScreenX, bldgScreenY + halfTileHeight);
+              buildingsCtx.closePath();
+              buildingsCtx.stroke();
+              
+              // Draw a dot at the building center
+              buildingsCtx.fillStyle = highlightColor;
+              buildingsCtx.beginPath();
+              buildingsCtx.arc(centerX, centerY, 4 / zoom, 0, Math.PI * 2);
+              buildingsCtx.fill();
+            }
+          }
         }
         
         buildingsCtx.setTransform(1, 0, 0, 1, 0, 0);
