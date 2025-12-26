@@ -1189,7 +1189,7 @@ export const SERVICE_CONFIG = {
 } as const;
 
 // Building types that provide services
-const SERVICE_BUILDING_TYPES = new Set([
+export const SERVICE_BUILDING_TYPES = new Set([
   'police_station', 'fire_station', 'hospital', 'school', 'university',
   'power_plant', 'water_tower'
 ]);
@@ -1396,6 +1396,92 @@ function hasRoadAccess(
     }
   }
 
+  return false;
+}
+
+/**
+ * Check if a service building has road connectivity.
+ * 
+ * Rules:
+ * - Power plants: Must be within 1 tile of a road (can be 1 tile away)
+ * - All other service buildings: Must be directly adjacent (touching) a road
+ * - Multi-tile buildings: Connected if any tile is adjacent to a road
+ * 
+ * @param grid - The game grid
+ * @param x - X coordinate of building origin
+ * @param y - Y coordinate of building origin
+ * @param buildingType - Type of service building
+ * @param gridSize - Size of the grid
+ * @returns true if building has road connectivity, false otherwise
+ */
+export function isServiceBuildingRoadConnected(
+  grid: Tile[][],
+  x: number,
+  y: number,
+  buildingType: BuildingType,
+  gridSize: number
+): boolean {
+  // Check if this is a service building
+  if (!SERVICE_BUILDING_TYPES.has(buildingType)) {
+    return true; // Non-service buildings don't need road connectivity
+  }
+
+  const size = getBuildingSize(buildingType);
+  const isPowerPlant = buildingType === 'power_plant';
+  
+  // For power plants, check within 1 tile distance (8 neighbors: 4 cardinal + 4 diagonal)
+  // For others, check only direct adjacency (4 cardinal neighbors)
+  const checkDistance = isPowerPlant ? 1 : 0;
+  
+  // Check all tiles in the building footprint
+  for (let dy = 0; dy < size.height; dy++) {
+    for (let dx = 0; dx < size.width; dx++) {
+      const checkX = x + dx;
+      const checkY = y + dy;
+      
+      if (checkX < 0 || checkX >= gridSize || checkY < 0 || checkY >= gridSize) {
+        continue;
+      }
+      
+      // Check neighbors based on distance requirement
+      if (checkDistance === 0) {
+        // Direct adjacency: check 4 cardinal directions
+        // Isometric coordinate mapping:
+        // north = (x-1, y), east = (x, y-1), south = (x+1, y), west = (x, y+1)
+        const neighbors = [
+          [checkX - 1, checkY],  // north
+          [checkX + 1, checkY],  // south
+          [checkX, checkY - 1],  // east
+          [checkX, checkY + 1],  // west
+        ];
+        
+        for (const [nx, ny] of neighbors) {
+          if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize) {
+            if (grid[ny][nx].building.type === 'road') {
+              return true;
+            }
+          }
+        }
+      } else {
+        // Distance 1: check 8 neighbors (4 cardinal + 4 diagonal)
+        for (let offsetY = -1; offsetY <= 1; offsetY++) {
+          for (let offsetX = -1; offsetX <= 1; offsetX++) {
+            if (offsetX === 0 && offsetY === 0) continue; // Skip self
+            
+            const nx = checkX + offsetX;
+            const ny = checkY + offsetY;
+            
+            if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize) {
+              if (grid[ny][nx].building.type === 'road') {
+                return true;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  
   return false;
 }
 
