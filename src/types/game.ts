@@ -245,7 +245,15 @@ export interface Building {
   abandoned: boolean; // Building is abandoned due to low demand, produces nothing
   flipped?: boolean; // Horizontally mirror the sprite (used for waterfront buildings to face water)
   cityId?: string; // ID of the city this building belongs to (for multi-city support)
-  bridgeInfo?: BridgeInfo; // Bridge metadata for road tiles that are part of a bridge
+  grandfatheredRoadAccess?: boolean; // If true, building was placed before road connectivity requirement (exempt from road check)
+  // Bridge-specific properties
+  bridgeType?: BridgeType; // Type of bridge (small, medium, large, suspension)
+  bridgeOrientation?: BridgeOrientation; // Direction the bridge spans (ns or ew)
+  bridgeVariant?: number; // Visual variant for this bridge type (0-2)
+  bridgePosition?: 'start' | 'middle' | 'end'; // Position within the bridge span
+  bridgeIndex?: number; // Index of this tile within the bridge (0-based)
+  bridgeSpan?: number; // Total number of tiles in this bridge
+  bridgeTrackType?: BridgeTrackType; // What the bridge carries: 'road' or 'rail'
 }
 
 // City definition for multi-city maps

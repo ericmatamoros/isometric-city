@@ -1511,13 +1511,17 @@ export const SERVICE_CONFIG = {
 } as const;
 
 // Building types that provide services
-const SERVICE_BUILDING_TYPES = new Set([
+export const SERVICE_BUILDING_TYPES = new Set([
   'police_station', 'fire_station', 'hospital', 'school', 'university',
   'power_plant', 'water_tower'
 ]);
 
 // Calculate service coverage from service buildings - optimized version
-function calculateServiceCoverage(grid: Tile[][], size: number): ServiceCoverage {
+export function calculateServiceCoverage(
+  grid: Tile[][],
+  size: number,
+  roadCacheVersion: number = 0
+): ServiceCoverage {
   const services = createServiceCoverage(size);
 
   // First pass: collect all service building positions (much faster than checking every tile)
@@ -1539,6 +1543,25 @@ function calculateServiceCoverage(grid: Tile[][], size: number): ServiceCoverage
       // Skip abandoned buildings
       if (tile.building.abandoned) {
         continue;
+      }
+
+      // NEW: Check road connectivity - only include connected buildings
+      // EXCEPT: Grandfathered buildings (placed before road requirement) are exempt
+      const isGrandfathered = tile.building.grandfatheredRoadAccess === true;
+
+      if (!isGrandfathered) {
+        const hasRoadConnectivity = getServiceBuildingRoadConnectivity(
+          grid,
+          x,
+          y,
+          buildingType,
+          size,
+          roadCacheVersion
+        );
+
+        if (!hasRoadConnectivity) {
+          continue; // Skip disconnected service buildings (unless grandfathered)
+        }
       }
 
       serviceBuildings.push({ x, y, type: buildingType });
@@ -1719,6 +1742,159 @@ function hasRoadAccess(
   }
 
   return false;
+}
+
+/**
+ * Check if a service building has road connectivity.
+ * 
+ * Rules:
+ * - Power plants: Must be within 1 tile of a road (can be 1 tile away)
+ * - All other service buildings: Must be directly adjacent (touching) a road
+ * - Multi-tile buildings: Connected if any tile is adjacent to a road
+ * 
+ * @param grid - The game grid
+ * @param x - X coordinate of building origin
+ * @param y - Y coordinate of building origin
+ * @param buildingType - Type of service building
+ * @param gridSize - Size of the grid
+ * @returns true if building has road connectivity, false otherwise
+ */
+export function isServiceBuildingRoadConnected(
+  grid: Tile[][],
+  x: number,
+  y: number,
+  buildingType: BuildingType,
+  gridSize: number
+): boolean {
+  // Check if this is a service building
+  if (!SERVICE_BUILDING_TYPES.has(buildingType)) {
+    return true; // Non-service buildings don't need road connectivity
+  }
+
+  const size = getBuildingSize(buildingType);
+  const isPowerPlant = buildingType === 'power_plant';
+
+  // For power plants, check within 1 tile distance (8 neighbors: 4 cardinal + 4 diagonal)
+  // For others, check only direct adjacency (4 cardinal neighbors)
+  const checkDistance = isPowerPlant ? 1 : 0;
+
+  // Check all tiles in the building footprint
+  for (let dy = 0; dy < size.height; dy++) {
+    for (let dx = 0; dx < size.width; dx++) {
+      const checkX = x + dx;
+      const checkY = y + dy;
+
+      if (checkX < 0 || checkX >= gridSize || checkY < 0 || checkY >= gridSize) {
+        continue;
+      }
+
+      // Check neighbors based on distance requirement
+      if (checkDistance === 0) {
+        // Direct adjacency: check 4 cardinal directions
+        // Isometric coordinate mapping:
+        // north = (x-1, y), east = (x, y-1), south = (x+1, y), west = (x, y+1)
+        const neighbors = [
+          [checkX - 1, checkY],  // north
+          [checkX + 1, checkY],  // south
+          [checkX, checkY - 1],  // east
+          [checkX, checkY + 1],  // west
+        ];
+
+        for (const [nx, ny] of neighbors) {
+          if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize) {
+            if (grid[ny][nx].building.type === 'road') {
+              return true;
+            }
+          }
+        }
+      } else {
+        // Distance 1: check 8 neighbors (4 cardinal + 4 diagonal)
+        for (let offsetY = -1; offsetY <= 1; offsetY++) {
+          for (let offsetX = -1; offsetX <= 1; offsetX++) {
+            if (offsetX === 0 && offsetY === 0) continue; // Skip self
+
+            const nx = checkX + offsetX;
+            const ny = checkY + offsetY;
+
+            if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize) {
+              if (grid[ny][nx].building.type === 'road') {
+                return true;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+// Road connectivity cache for service buildings
+// Maps building position (y * gridSize + x) to connectivity status
+// Invalidate when roads are added/removed
+let serviceBuildingRoadCache: Map<number, boolean> = new Map();
+let serviceBuildingRoadCacheVersion: number = 0;
+
+// Current road cache version - increments when roads change
+let currentRoadCacheVersion: number = 0;
+
+/**
+ * Get road connectivity for a service building (cached).
+ * 
+ * @param grid - The game grid
+ * @param x - X coordinate of building origin
+ * @param y - Y coordinate of building origin
+ * @param buildingType - Type of service building
+ * @param gridSize - Size of the grid
+ * @param cacheVersion - Current cache version (increment to invalidate)
+ * @returns true if building has road connectivity
+ */
+export function getServiceBuildingRoadConnectivity(
+  grid: Tile[][],
+  x: number,
+  y: number,
+  buildingType: BuildingType,
+  gridSize: number,
+  cacheVersion: number
+): boolean {
+  // Check if this is a service building
+  if (!SERVICE_BUILDING_TYPES.has(buildingType)) {
+    return true; // Non-service buildings don't need road connectivity
+  }
+
+  const cacheKey = y * gridSize + x;
+
+  // Check cache (only if version matches)
+  if (serviceBuildingRoadCacheVersion === cacheVersion) {
+    const cached = serviceBuildingRoadCache.get(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+  } else {
+    // Cache version mismatch - clear cache and update version
+    serviceBuildingRoadCache.clear();
+    serviceBuildingRoadCacheVersion = cacheVersion;
+  }
+
+  // Compute connectivity (always recompute if not in cache)
+  const connected = isServiceBuildingRoadConnected(grid, x, y, buildingType, gridSize);
+
+  // Cache result (only if version matches)
+  if (serviceBuildingRoadCacheVersion === cacheVersion) {
+    serviceBuildingRoadCache.set(cacheKey, connected);
+  }
+
+  return connected;
+}
+
+/**
+ * Invalidate the road connectivity cache.
+ * Call this when roads are added or removed.
+ */
+export function invalidateServiceBuildingRoadCache(): void {
+  serviceBuildingRoadCacheVersion++;
+  serviceBuildingRoadCache.clear();
 }
 
 // Evolve buildings based on conditions, reserving footprints as density increases
@@ -2361,7 +2537,7 @@ export function simulateTick(state: GameState): GameState {
   const size = state.gridSize;
 
   // Pre-calculate service coverage once (read-only operation on original grid)
-  const services = calculateServiceCoverage(state.grid, size);
+  const services = calculateServiceCoverage(state.grid, size, currentRoadCacheVersion);
 
   // Track which rows have been modified to avoid unnecessary row cloning
   const modifiedRows = new Set<number>();
@@ -3003,6 +3179,22 @@ export function placeBuilding(
       shouldFlip = waterCheck.shouldFlip;
     }
 
+    // Check road connectivity requirement for service buildings
+    if (SERVICE_BUILDING_TYPES.has(buildingType)) {
+      const hasRoadConnectivity = isServiceBuildingRoadConnected(
+        newGrid,
+        x,
+        y,
+        buildingType,
+        state.gridSize
+      );
+
+      if (!hasRoadConnectivity) {
+        // Return state unchanged - placement blocked
+        return state;
+      }
+    }
+
     if (size.width > 1 || size.height > 1) {
       // Multi-tile building - check if we can place it
       if (!canPlaceMultiTileBuilding(newGrid, x, y, size.width, size.height, state.gridSize)) {
@@ -3055,6 +3247,12 @@ export function placeBuilding(
     // NOTE: Bridge creation is handled separately during drag operations across water
     // We do NOT auto-create bridges here because placing individual road tiles on opposite
     // sides of water should not automatically create a bridge - only explicit dragging should
+  }
+
+  // After successful placement, invalidate road cache if a service building was placed
+  if (buildingType && SERVICE_BUILDING_TYPES.has(buildingType)) {
+    invalidateServiceBuildingRoadCache();
+    currentRoadCacheVersion++;
   }
 
   return { ...state, grid: newGrid };
@@ -3656,7 +3854,7 @@ export function generateRandomAdvancedCity(size: number = DEFAULT_GRID_SIZE, cit
   }
 
   // Calculate services and stats
-  const services = calculateServiceCoverage(grid, size);
+  const services = calculateServiceCoverage(grid, size, currentRoadCacheVersion);
 
   // Set power and water for all buildings
   for (let y = 0; y < size; y++) {
