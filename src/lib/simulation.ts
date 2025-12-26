@@ -14,6 +14,8 @@ import {
   Notification,
   AdjacentCity,
   WaterBody,
+  BridgeType,
+  BridgeInfo,
   BUILDING_STATS,
   RESIDENTIAL_BUILDINGS,
   COMMERCIAL_BUILDINGS,
@@ -712,6 +714,342 @@ function createTile(x: number, y: number, buildingType: BuildingType = 'grass'):
 
 // Building types that don't require construction (already complete when placed)
 const NO_CONSTRUCTION_TYPES: BuildingType[] = ['grass', 'empty', 'water', 'road', 'tree'];
+
+// ============================================================================
+// Bridge System Constants and Functions
+// ============================================================================
+
+/** Maximum water span that can have a bridge */
+const MAX_BRIDGE_SPAN = 10;
+
+/** Bridge type configurations based on span width */
+const BRIDGE_TYPE_CONFIG: Record<BridgeType, { minSpan: number; maxSpan: number; height: number }> = {
+  wooden_bridge: { minSpan: 1, maxSpan: 2, height: 3 },
+  stone_bridge: { minSpan: 2, maxSpan: 3, height: 4 },
+  steel_bridge: { minSpan: 3, maxSpan: 5, height: 5 },
+  beam_bridge: { minSpan: 4, maxSpan: 6, height: 5 },
+  arch_bridge: { minSpan: 5, maxSpan: 7, height: 7 },
+  suspension_bridge: { minSpan: 6, maxSpan: 8, height: 10 },
+  cable_stayed: { minSpan: 7, maxSpan: 10, height: 12 },
+  golden_gate: { minSpan: 8, maxSpan: 10, height: 14 },
+};
+
+/** Get appropriate bridge type for a given span */
+function getBridgeTypeForSpan(span: number): BridgeType {
+  if (span <= 2) return 'wooden_bridge';
+  if (span <= 3) return Math.random() > 0.5 ? 'stone_bridge' : 'wooden_bridge';
+  if (span <= 4) return Math.random() > 0.5 ? 'steel_bridge' : 'stone_bridge';
+  if (span <= 5) return Math.random() > 0.5 ? 'beam_bridge' : 'steel_bridge';
+  if (span <= 6) return Math.random() > 0.5 ? 'arch_bridge' : 'beam_bridge';
+  if (span <= 7) return Math.random() > 0.5 ? 'suspension_bridge' : 'arch_bridge';
+  if (span <= 8) return Math.random() > 0.5 ? 'cable_stayed' : 'suspension_bridge';
+  if (span <= 9) return Math.random() > 0.5 ? 'golden_gate' : 'cable_stayed';
+  return 'golden_gate';
+}
+
+/** Generate a unique bridge ID */
+function generateBridgeId(): string {
+  return `bridge_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+/** Check if a tile is water */
+function isWaterTile(grid: Tile[][], gridSize: number, x: number, y: number): boolean {
+  if (x < 0 || y < 0 || x >= gridSize || y >= gridSize) return false;
+  return grid[y][x].building.type === 'water';
+}
+
+/** Check if a tile has a road or is land that could anchor a bridge */
+function isRoadOrLand(grid: Tile[][], gridSize: number, x: number, y: number): boolean {
+  if (x < 0 || y < 0 || x >= gridSize || y >= gridSize) return false;
+  const type = grid[y][x].building.type;
+  return type === 'road' || (type !== 'water');
+}
+
+/** Check if a tile is specifically a road */
+function isRoadTile(grid: Tile[][], gridSize: number, x: number, y: number): boolean {
+  if (x < 0 || y < 0 || x >= gridSize || y >= gridSize) return false;
+  return grid[y][x].building.type === 'road';
+}
+
+/**
+ * Scan in a direction from a land tile to find if a bridge can be created
+ * Returns the water tiles that would become bridge, or null if no valid bridge
+ */
+function scanForBridgeOpportunity(
+  grid: Tile[][],
+  gridSize: number,
+  startX: number,
+  startY: number,
+  dx: number,
+  dy: number
+): { waterTiles: { x: number; y: number }[]; orientation: 'ns' | 'ew' } | null {
+  const waterTiles: { x: number; y: number }[] = [];
+  let x = startX + dx;
+  let y = startY + dy;
+  
+  // Scan through water tiles
+  while (x >= 0 && x < gridSize && y >= 0 && y < gridSize) {
+    if (isWaterTile(grid, gridSize, x, y)) {
+      waterTiles.push({ x, y });
+      if (waterTiles.length > MAX_BRIDGE_SPAN) {
+        return null; // Too wide for a bridge
+      }
+    } else if (isRoadTile(grid, gridSize, x, y) || 
+               (grid[y][x].building.type !== 'water' && grid[y][x].building.type !== 'empty')) {
+      // Found land or road on the other side
+      if (waterTiles.length >= 1) {
+        const orientation: 'ns' | 'ew' = dx !== 0 ? 'ns' : 'ew';
+        return { waterTiles, orientation };
+      }
+      return null; // No water to bridge
+    } else {
+      return null; // Found something else (empty = part of building)
+    }
+    x += dx;
+    y += dy;
+  }
+  
+  return null; // Reached edge without finding land
+}
+
+/**
+ * Check if placing a road at (x, y) should create a bridge
+ * This is called when placing a road adjacent to water
+ */
+function checkAndCreateBridge(
+  grid: Tile[][],
+  gridSize: number,
+  x: number,
+  y: number
+): { bridgeTiles: { x: number; y: number; bridgeInfo: BridgeInfo }[] } | null {
+  // Check all four directions for bridge opportunities
+  const directions = [
+    { dx: 1, dy: 0 },   // South
+    { dx: -1, dy: 0 },  // North
+    { dx: 0, dy: 1 },   // West
+    { dx: 0, dy: -1 },  // East
+  ];
+  
+  for (const { dx, dy } of directions) {
+    const result = scanForBridgeOpportunity(grid, gridSize, x, y, dx, dy);
+    if (result) {
+      const { waterTiles, orientation } = result;
+      const span = waterTiles.length;
+      const bridgeType = getBridgeTypeForSpan(span);
+      const bridgeId = generateBridgeId();
+      const config = BRIDGE_TYPE_CONFIG[bridgeType];
+      const variant = Math.floor(Math.random() * 3) as 0 | 1 | 2;
+      
+      const bridgeTiles = waterTiles.map((tile, index) => ({
+        x: tile.x,
+        y: tile.y,
+        bridgeInfo: {
+          bridgeId,
+          bridgeType,
+          variant,
+          span,
+          position: index,
+          orientation,
+          height: config.height,
+        } as BridgeInfo,
+      }));
+      
+      return { bridgeTiles };
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Check if a road can be placed on water as part of a bridge
+ * Returns true if:
+ * 1. There's an adjacent road (bridge extension)
+ * 2. OR there's adjacent land on one side and road/land reachable on the other within MAX_BRIDGE_SPAN
+ */
+function canPlaceRoadOnWater(
+  grid: Tile[][],
+  gridSize: number,
+  x: number,
+  y: number
+): boolean {
+  // Check if there's an adjacent road or bridge tile
+  const hasAdjacentRoad = 
+    isRoadTile(grid, gridSize, x - 1, y) ||
+    isRoadTile(grid, gridSize, x + 1, y) ||
+    isRoadTile(grid, gridSize, x, y - 1) ||
+    isRoadTile(grid, gridSize, x, y + 1);
+  
+  if (hasAdjacentRoad) {
+    // Check if extending from an existing bridge is valid
+    // Count consecutive water tiles in each direction
+    const directions = [
+      { dx: 1, dy: 0 },
+      { dx: -1, dy: 0 },
+      { dx: 0, dy: 1 },
+      { dx: 0, dy: -1 },
+    ];
+    
+    for (const { dx, dy } of directions) {
+      // Skip if there's a road in this direction (we're extending from there)
+      if (isRoadTile(grid, gridSize, x + dx, y + dy)) continue;
+      
+      // Count water tiles in the opposite direction
+      let waterCount = 0;
+      let cx = x;
+      let cy = y;
+      while (isWaterTile(grid, gridSize, cx, cy) || (cx === x && cy === y)) {
+        if (cx !== x || cy !== y) waterCount++;
+        cx -= dx;
+        cy -= dy;
+        if (isRoadTile(grid, gridSize, cx, cy)) {
+          // Found road on the other side
+          if (waterCount <= MAX_BRIDGE_SPAN) {
+            return true;
+          }
+        }
+        if (!isWaterTile(grid, gridSize, cx, cy) && !(cx === x && cy === y)) break;
+      }
+    }
+  }
+  
+  return hasAdjacentRoad; // Allow if adjacent to road (will be validated when bridge is complete)
+}
+
+/**
+ * Create bridge info for a road tile being placed on water
+ */
+function createBridgeInfoForWaterRoad(
+  grid: Tile[][],
+  gridSize: number,
+  x: number,
+  y: number
+): BridgeInfo | null {
+  // Find the direction of the bridge by looking for adjacent roads
+  const directions = [
+    { dx: 1, dy: 0, orientation: 'ns' as const },
+    { dx: -1, dy: 0, orientation: 'ns' as const },
+    { dx: 0, dy: 1, orientation: 'ew' as const },
+    { dx: 0, dy: -1, orientation: 'ew' as const },
+  ];
+  
+  for (const { dx, dy, orientation } of directions) {
+    if (isRoadTile(grid, gridSize, x + dx, y + dy)) {
+      const adjacentTile = grid[y + dy][x + dx];
+      
+      // If adjacent road has bridge info, extend it
+      if (adjacentTile.building.bridgeInfo) {
+        const existingBridge = adjacentTile.building.bridgeInfo;
+        // Check if we're extending in the same direction
+        if (existingBridge.orientation === orientation) {
+          return {
+            bridgeId: existingBridge.bridgeId,
+            bridgeType: existingBridge.bridgeType,
+            variant: existingBridge.variant,
+            span: existingBridge.span + 1, // Will be recalculated when bridge is complete
+            position: existingBridge.position + 1,
+            orientation: existingBridge.orientation,
+            height: existingBridge.height,
+          };
+        }
+      }
+      
+      // Starting a new bridge from land
+      // Estimate span by scanning ahead
+      let span = 1;
+      let cx = x - dx;
+      let cy = y - dy;
+      while (isWaterTile(grid, gridSize, cx, cy) && span < MAX_BRIDGE_SPAN) {
+        span++;
+        cx -= dx;
+        cy -= dy;
+      }
+      
+      const bridgeType = getBridgeTypeForSpan(span);
+      const config = BRIDGE_TYPE_CONFIG[bridgeType];
+      
+      return {
+        bridgeId: generateBridgeId(),
+        bridgeType,
+        variant: Math.floor(Math.random() * 3) as 0 | 1 | 2,
+        span,
+        position: 0,
+        orientation,
+        height: config.height,
+      };
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Update bridge span info for all connected bridge tiles
+ * Called when a new bridge tile is placed to recalculate positions
+ */
+function updateBridgeSpanInfo(
+  grid: Tile[][],
+  gridSize: number,
+  x: number,
+  y: number,
+  bridgeInfo: BridgeInfo
+): void {
+  const { orientation, bridgeId } = bridgeInfo;
+  
+  // Determine scan direction based on orientation
+  const directions = orientation === 'ns' 
+    ? [{ dx: 1, dy: 0 }, { dx: -1, dy: 0 }]
+    : [{ dx: 0, dy: 1 }, { dx: 0, dy: -1 }];
+  
+  // Find all tiles in this bridge
+  const bridgeTiles: { x: number; y: number }[] = [{ x, y }];
+  
+  for (const { dx, dy } of directions) {
+    let cx = x + dx;
+    let cy = y + dy;
+    while (cx >= 0 && cx < gridSize && cy >= 0 && cy < gridSize) {
+      const tile = grid[cy][cx];
+      if (tile.building.type === 'road' && tile.building.bridgeInfo?.bridgeId === bridgeId) {
+        bridgeTiles.push({ x: cx, y: cy });
+        cx += dx;
+        cy += dy;
+      } else if (tile.building.type === 'road' && tile.building.bridgeInfo) {
+        // Different bridge, stop
+        break;
+      } else if (tile.building.type === 'road') {
+        // Road without bridge info (land road), stop
+        break;
+      } else {
+        break;
+      }
+    }
+  }
+  
+  // Update all bridge tiles with correct span and position
+  const span = bridgeTiles.length;
+  const newBridgeType = getBridgeTypeForSpan(span);
+  const newConfig = BRIDGE_TYPE_CONFIG[newBridgeType];
+  
+  // Sort tiles by position for consistent numbering
+  if (orientation === 'ns') {
+    bridgeTiles.sort((a, b) => a.x - b.x);
+  } else {
+    bridgeTiles.sort((a, b) => a.y - b.y);
+  }
+  
+  for (let i = 0; i < bridgeTiles.length; i++) {
+    const tile = grid[bridgeTiles[i].y][bridgeTiles[i].x];
+    if (tile.building.bridgeInfo) {
+      tile.building.bridgeInfo = {
+        ...tile.building.bridgeInfo,
+        span,
+        position: i,
+        bridgeType: newBridgeType,
+        height: newConfig.height,
+      };
+    }
+  }
+}
 
 function createBuilding(type: BuildingType): Building {
   // Buildings that don't require construction start at 100% complete
@@ -2264,7 +2602,28 @@ export function placeBuilding(
   const tile = state.grid[y]?.[x];
   if (!tile) return state;
 
-  // Can't build on water
+  // Special handling for roads on water (bridges)
+  if (tile.building.type === 'water' && buildingType === 'road') {
+    if (canPlaceRoadOnWater(state.grid, state.gridSize, x, y)) {
+      // Create bridge road on water
+      const newGrid = state.grid.map(row => row.map(t => ({ ...t, building: { ...t.building } })));
+      const bridgeInfo = createBridgeInfoForWaterRoad(state.grid, state.gridSize, x, y);
+      
+      newGrid[y][x].building = createBuilding('road');
+      newGrid[y][x].building.bridgeInfo = bridgeInfo || undefined;
+      newGrid[y][x].zone = 'none';
+      
+      // Update bridge info for all connected bridge tiles to have correct span
+      if (bridgeInfo) {
+        updateBridgeSpanInfo(newGrid, state.gridSize, x, y, bridgeInfo);
+      }
+      
+      return { ...state, grid: newGrid };
+    }
+    return state; // Can't place road on water without valid bridge
+  }
+
+  // Can't build on water (except roads handled above)
   if (tile.building.type === 'water') return state;
 
   // Can't place roads on existing buildings (only allow on grass, tree, existing roads, or rail - rail+road creates combined tile)

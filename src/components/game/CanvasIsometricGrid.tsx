@@ -103,6 +103,11 @@ import {
   GATE_ANIMATION_SPEED,
 } from '@/components/game/railSystem';
 import {
+  drawBridgeTile,
+  isBridgeTile,
+  getBridgeDeckOffset,
+} from '@/components/game/bridgeSystem';
+import {
   spawnTrain,
   updateTrain,
   drawTrains,
@@ -2752,23 +2757,37 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     // PERF: Use for loop instead of forEach
     for (let i = 0; i < roadQueue.length; i++) {
       const { tile, screenX, screenY } = roadQueue[i];
-      // Draw road base tile first (grey diamond)
-      ctx.fillStyle = '#4a4a4a';
-      ctx.beginPath();
-      ctx.moveTo(screenX + halfTileWidth, screenY);
-      ctx.lineTo(screenX + tileWidth, screenY + halfTileHeight);
-      ctx.lineTo(screenX + halfTileWidth, screenY + tileHeight);
-      ctx.lineTo(screenX, screenY + halfTileHeight);
-      ctx.closePath();
-      ctx.fill();
       
-      // Draw road markings and sidewalks
-      drawBuilding(ctx, screenX, screenY, tile);
+      // Check if this is a bridge tile (road over water)
+      if (isBridgeTile(tile) && tile.building.bridgeInfo) {
+        // Draw bridge with elevated deck and structure
+        drawBridgeTile(ctx, screenX, screenY, tile.building.bridgeInfo, zoom);
+        
+        // Draw road markings on the bridge deck (with Y offset for height)
+        const deckOffset = getBridgeDeckOffset(tile.building.bridgeInfo);
+        drawBuilding(ctx, screenX, screenY - deckOffset, tile);
+      } else {
+        // Draw normal road base tile first (grey diamond)
+        ctx.fillStyle = '#4a4a4a';
+        ctx.beginPath();
+        ctx.moveTo(screenX + halfTileWidth, screenY);
+        ctx.lineTo(screenX + tileWidth, screenY + halfTileHeight);
+        ctx.lineTo(screenX + halfTileWidth, screenY + tileHeight);
+        ctx.lineTo(screenX, screenY + halfTileHeight);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Draw road markings and sidewalks
+        drawBuilding(ctx, screenX, screenY, tile);
+      }
       
       // If this road has a rail overlay, draw just the rail tracks (ties and rails, no ballast)
       // Crossing signals/gates are drawn later (after rail tiles) to avoid z-order issues
       if (tile.hasRailOverlay) {
-        drawRailTracksOnly(ctx, screenX, screenY, tile.x, tile.y, grid, gridSize, zoom);
+        const trackYOffset = isBridgeTile(tile) && tile.building.bridgeInfo 
+          ? getBridgeDeckOffset(tile.building.bridgeInfo) 
+          : 0;
+        drawRailTracksOnly(ctx, screenX, screenY - trackYOffset, tile.x, tile.y, grid, gridSize, zoom);
       }
     }
     
