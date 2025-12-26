@@ -197,6 +197,29 @@ function loadGameState(): GameState | null {
         if (!parsed.waterBodies) {
           parsed.waterBodies = [];
         }
+        // Ensure cities exists for multi-city support
+        if (!parsed.cities) {
+          // Create a default city covering the entire map
+          parsed.cities = [{
+            id: parsed.id || 'default-city',
+            name: parsed.cityName || 'City',
+            bounds: {
+              minX: 0,
+              minY: 0,
+              maxX: (parsed.gridSize || 50) - 1,
+              maxY: (parsed.gridSize || 50) - 1,
+            },
+            economy: {
+              population: parsed.stats?.population || 0,
+              jobs: parsed.stats?.jobs || 0,
+              income: parsed.stats?.income || 0,
+              expenses: parsed.stats?.expenses || 0,
+              happiness: parsed.stats?.happiness || 50,
+              lastCalculated: 0,
+            },
+            color: '#3b82f6',
+          }];
+        }
         // Ensure hour exists for day/night cycle
         if (parsed.hour === undefined) {
           parsed.hour = 12; // Default to noon
@@ -900,6 +923,28 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         if (!parsed.waterBodies) {
           parsed.waterBodies = [];
         }
+        // Ensure cities exists for multi-city support
+        if (!parsed.cities) {
+          parsed.cities = [{
+            id: parsed.id || 'default-city',
+            name: parsed.cityName || 'City',
+            bounds: {
+              minX: 0,
+              minY: 0,
+              maxX: (parsed.gridSize || 50) - 1,
+              maxY: (parsed.gridSize || 50) - 1,
+            },
+            economy: {
+              population: parsed.stats?.population || 0,
+              jobs: parsed.stats?.jobs || 0,
+              income: parsed.stats?.income || 0,
+              expenses: parsed.stats?.expenses || 0,
+              happiness: parsed.stats?.happiness || 50,
+              lastCalculated: 0,
+            },
+            color: '#3b82f6',
+          }];
+        }
         // Ensure effectiveTaxRate exists for lagging tax effect
         if (parsed.effectiveTaxRate === undefined) {
           parsed.effectiveTaxRate = parsed.taxRate ?? 9;
@@ -1067,6 +1112,28 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     }
     if (!cityState.waterBodies) {
       cityState.waterBodies = [];
+    }
+    // Ensure cities exists for multi-city support
+    if (!cityState.cities) {
+      cityState.cities = [{
+        id: cityState.id || 'default-city',
+        name: cityState.cityName || 'City',
+        bounds: {
+          minX: 0,
+          minY: 0,
+          maxX: (cityState.gridSize || 50) - 1,
+          maxY: (cityState.gridSize || 50) - 1,
+        },
+        economy: {
+          population: cityState.stats?.population || 0,
+          jobs: cityState.stats?.jobs || 0,
+          income: cityState.stats?.income || 0,
+          expenses: cityState.stats?.expenses || 0,
+          happiness: cityState.stats?.happiness || 50,
+          lastCalculated: 0,
+        },
+        color: '#3b82f6',
+      }];
     }
     if (cityState.effectiveTaxRate === undefined) {
       cityState.effectiveTaxRate = cityState.taxRate ?? 9;

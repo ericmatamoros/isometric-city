@@ -40,7 +40,7 @@ export const PEDESTRIAN_SPAWN_INTERVAL = 0.03;      // Seconds between spawn bat
 export const PEDESTRIAN_UPDATE_SKIP_DISTANCE = 30;  // Skip detailed updates for pedestrians this far from view
 
 // Zoom limits for camera
-export const ZOOM_MIN = 0.2;                      // Minimum zoom level (most zoomed out)
+export const ZOOM_MIN = 0.08;                     // Minimum zoom level (most zoomed out - for large maps/multiple cities)
 export const ZOOM_MAX = 7;                        // Maximum zoom level (most zoomed in)
 
 // Zoom thresholds for rendering detail elements
@@ -49,6 +49,13 @@ export const CAR_MIN_ZOOM = 0.4;                  // Desktop car threshold (cars
 export const CAR_MIN_ZOOM_MOBILE = 0.45;          // Mobile car threshold (slightly higher for perf)
 export const PEDESTRIAN_MIN_ZOOM = 0.5;           // Desktop pedestrian threshold
 export const PEDESTRIAN_MIN_ZOOM_MOBILE = 0.55;   // Mobile pedestrian threshold (slightly higher for perf)
+
+// Vehicle rendering thresholds - hide at very zoomed out levels for performance
+export const VEHICLE_FAR_ZOOM_THRESHOLD = 0.25;   // Below this zoom: hide ALL vehicles/pedestrians on desktop too
+export const TRAIN_MIN_ZOOM_FAR = 0.20;           // Trains visible slightly further out than cars
+export const BOAT_MIN_ZOOM_FAR = 0.20;            // Boats visible at moderate zoom
+export const HELICOPTER_MIN_ZOOM_FAR = 0.20;      // Helicopters visible at moderate zoom
+export const AIRPLANE_MIN_ZOOM_FAR = 0.15;        // Airplanes visible even when quite zoomed out
 export const TRAFFIC_LIGHT_MIN_ZOOM = 0.45;       // Traffic lights at intersections
 export const DIRECTION_ARROWS_MIN_ZOOM = 0.65;    // Directional arrows on merged roads
 export const MEDIAN_PLANTS_MIN_ZOOM = 0.55;       // Plants/shrubs on road medians
@@ -251,7 +258,12 @@ export const TRAFFIC_LIGHT_YELLOW_DURATION = 0.8;  // Seconds
 export const TRAFFIC_LIGHT_CYCLE = 7.6;            // Full cycle time
 
 // Train system constants
-export const TRAIN_MIN_ZOOM = 0.35;               // Minimum zoom to show trains
+export const TRAIN_MIN_ZOOM = 0.35;               // Minimum zoom to show trains (normal)
 export const TRAIN_SPAWN_INTERVAL = 3.0;          // Seconds between train spawn attempts
 export const MIN_RAIL_TILES_FOR_TRAINS = 10;      // Minimum rail tiles needed
 export const MAX_TRAINS = 35;                      // Maximum trains in city
+
+// Far zoom thresholds - all mobile/animated entities hidden below these levels
+export const HELICOPTER_MIN_ZOOM = 0.3;           // Minimum zoom to show helicopters
+export const SMOG_MIN_ZOOM = 0.35;                // Minimum zoom to show factory smog
+export const FIREWORK_MIN_ZOOM = 0.3;             // Minimum zoom to show fireworks

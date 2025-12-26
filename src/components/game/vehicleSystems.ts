@@ -1,6 +1,6 @@
 import React, { useCallback, useRef } from 'react';
 import { Car, CarDirection, EmergencyVehicle, EmergencyVehicleType, Pedestrian, PedestrianDestType, WorldRenderState, TILE_WIDTH, TILE_HEIGHT } from './types';
-import { CAR_COLORS, CAR_MIN_ZOOM, CAR_MIN_ZOOM_MOBILE, PEDESTRIAN_MIN_ZOOM, PEDESTRIAN_MIN_ZOOM_MOBILE, DIRECTION_META, PEDESTRIAN_MAX_COUNT, PEDESTRIAN_ROAD_TILE_DENSITY, PEDESTRIAN_SPAWN_BATCH_SIZE, PEDESTRIAN_SPAWN_INTERVAL } from './constants';
+import { CAR_COLORS, CAR_MIN_ZOOM, CAR_MIN_ZOOM_MOBILE, PEDESTRIAN_MIN_ZOOM, PEDESTRIAN_MIN_ZOOM_MOBILE, DIRECTION_META, PEDESTRIAN_MAX_COUNT, PEDESTRIAN_ROAD_TILE_DENSITY, PEDESTRIAN_SPAWN_BATCH_SIZE, PEDESTRIAN_SPAWN_INTERVAL, VEHICLE_FAR_ZOOM_THRESHOLD } from './constants';
 import { isRoadTile, getDirectionOptions, pickNextDirection, findPathOnRoads, getDirectionToTile, gridToScreen } from './utils';
 import { findResidentialBuildings, findPedestrianDestinations, findStations, findFires, findRecreationAreas, findEnterableBuildings, SPORTS_TYPES, ACTIVE_RECREATION_TYPES } from './gridFinders';
 import { drawPedestrians as drawPedestriansUtil } from './drawPedestrians';
@@ -699,8 +699,10 @@ export function useVehicleSystems(
     const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed, zoom: currentZoom } = worldStateRef.current;
     
     // Clear cars if zoomed out too far (use mobile threshold on mobile for better perf)
+    // Also use far zoom threshold for desktop when very zoomed out (for large maps)
     const carMinZoom = isMobile ? CAR_MIN_ZOOM_MOBILE : CAR_MIN_ZOOM;
-    if (currentZoom < carMinZoom) {
+    const effectiveMinZoom = Math.max(carMinZoom, VEHICLE_FAR_ZOOM_THRESHOLD);
+    if (currentZoom < effectiveMinZoom) {
       carsRef.current = [];
       return;
     }
@@ -926,8 +928,10 @@ export function useVehicleSystems(
     const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed, zoom: currentZoom } = worldStateRef.current;
     
     // Clear pedestrians if zoomed out too far (use mobile threshold on mobile for better perf)
+    // Also use far zoom threshold for desktop when very zoomed out (for large maps)
     const pedestrianMinZoom = isMobile ? PEDESTRIAN_MIN_ZOOM_MOBILE : PEDESTRIAN_MIN_ZOOM;
-    if (currentZoom < pedestrianMinZoom) {
+    const effectiveMinZoom = Math.max(pedestrianMinZoom, VEHICLE_FAR_ZOOM_THRESHOLD);
+    if (currentZoom < effectiveMinZoom) {
       pedestriansRef.current = [];
       return;
     }

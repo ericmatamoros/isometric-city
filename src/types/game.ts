@@ -216,6 +216,35 @@ export interface Building {
   constructionProgress: number; // 0-100, building is under construction until 100
   abandoned: boolean; // Building is abandoned due to low demand, produces nothing
   flipped?: boolean; // Horizontally mirror the sprite (used for waterfront buildings to face water)
+  cityId?: string; // ID of the city this building belongs to (for multi-city support)
+}
+
+// City definition for multi-city maps
+export interface City {
+  id: string;
+  name: string;
+  // Bounds of the city (inclusive tile coordinates)
+  bounds: {
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+  };
+  // Economy stats (cached for performance)
+  economy: CityEconomy;
+  // City color for border rendering
+  color: string;
+}
+
+// Cached economy data for a city
+export interface CityEconomy {
+  population: number;
+  jobs: number;
+  income: number;
+  expenses: number;
+  happiness: number;
+  // Timestamp of last calculation for cache invalidation
+  lastCalculated: number;
 }
 
 export interface Tile {
@@ -340,6 +369,7 @@ export interface GameState {
   adjacentCities: AdjacentCity[];
   waterBodies: WaterBody[];
   gameVersion: number; // Increments when a new game starts - used to clear transient state like vehicles
+  cities: City[]; // Cities in the map (for multi-city support)
 }
 
 // Saved city metadata for the multi-save system

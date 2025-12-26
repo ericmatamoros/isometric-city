@@ -27,6 +27,8 @@ import {
   SMOG_PARTICLE_GROWTH,
   SMOG_MAX_PARTICLES_PER_FACTORY,
   SMOG_MAX_PARTICLES_PER_FACTORY_MOBILE,
+  SMOG_MIN_ZOOM,
+  FIREWORK_MIN_ZOOM,
 } from './constants';
 import { gridToScreen } from './utils';
 import { findFireworkBuildings, findSmogFactories } from './gridFinders';
@@ -79,7 +81,7 @@ export function useEffectsSystems(
 
   // Update fireworks - spawn, animate, and manage lifecycle
   const updateFireworks = useCallback((delta: number, currentHour: number) => {
-    const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed } = worldStateRef.current;
+    const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed, zoom: currentZoom } = worldStateRef.current;
 
     if (!currentGrid || currentGridSize <= 0 || currentSpeed === 0) {
       return;
@@ -87,6 +89,12 @@ export function useEffectsSystems(
 
     // Disable fireworks on mobile for performance
     if (isMobile) {
+      fireworksRef.current = [];
+      return;
+    }
+    
+    // Clear fireworks when zoomed out too far (for large map performance)
+    if (currentZoom < FIREWORK_MIN_ZOOM) {
       fireworksRef.current = [];
       return;
     }
@@ -386,6 +394,12 @@ export function useEffectsSystems(
     const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed, zoom: currentZoom } = worldStateRef.current;
     
     if (!currentGrid || currentGridSize <= 0 || currentSpeed === 0) {
+      return;
+    }
+    
+    // Clear smog when zoomed out too far (for large map performance)
+    if (currentZoom < SMOG_MIN_ZOOM) {
+      factorySmogRef.current = [];
       return;
     }
     

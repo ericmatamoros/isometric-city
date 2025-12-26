@@ -10,6 +10,9 @@ import {
   ROTOR_WASH_MAX_AGE,
   ROTOR_WASH_SPAWN_INTERVAL,
   PLANE_TYPES,
+  AIRPLANE_MIN_ZOOM_FAR,
+  HELICOPTER_MIN_ZOOM_FAR,
+  HELICOPTER_MIN_ZOOM,
 } from './constants';
 import { gridToScreen } from './utils';
 import { findAirports, findHeliports } from './gridFinders';
@@ -59,9 +62,15 @@ export function useAircraftSystems(
 
   // Update airplanes - spawn, move, and manage lifecycle
   const updateAirplanes = useCallback((delta: number) => {
-    const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed } = worldStateRef.current;
+    const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed, zoom: currentZoom } = worldStateRef.current;
     
     if (!currentGrid || currentGridSize <= 0 || currentSpeed === 0) {
+      return;
+    }
+    
+    // Clear airplanes if zoomed out too far (for large map performance)
+    if (currentZoom < AIRPLANE_MIN_ZOOM_FAR) {
+      airplanesRef.current = [];
       return;
     }
 
@@ -288,9 +297,15 @@ export function useAircraftSystems(
 
   // Update helicopters - spawn, move between hospitals/airports, and manage lifecycle
   const updateHelicopters = useCallback((delta: number) => {
-    const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed } = worldStateRef.current;
+    const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed, zoom: currentZoom } = worldStateRef.current;
     
     if (!currentGrid || currentGridSize <= 0 || currentSpeed === 0) {
+      return;
+    }
+    
+    // Clear helicopters if zoomed out too far (for large map performance)
+    if (currentZoom < HELICOPTER_MIN_ZOOM_FAR) {
+      helicoptersRef.current = [];
       return;
     }
 

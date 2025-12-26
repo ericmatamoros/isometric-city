@@ -42,6 +42,10 @@ import {
   ZOOM_MAX,
   WATER_ASSET_PATH,
   AIRPLANE_SPRITE_SRC,
+  TRAIN_MIN_ZOOM,
+  HELICOPTER_MIN_ZOOM,
+  SMOG_MIN_ZOOM,
+  FIREWORK_MIN_ZOOM,
 } from '@/components/game/constants';
 import {
   gridToScreen,
@@ -761,6 +765,11 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     const { offset: currentOffset, zoom: currentZoom, grid: currentGrid, gridSize: currentGridSize, canvasSize: size } = worldStateRef.current;
 
     if (!currentGrid || currentGridSize <= 0 || trainsRef.current.length === 0) {
+      return;
+    }
+    
+    // Skip drawing trains when very zoomed out (for large map performance)
+    if (currentZoom < TRAIN_MIN_ZOOM) {
       return;
     }
 

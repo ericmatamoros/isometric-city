@@ -8,6 +8,7 @@ import {
   MAX_BOATS,
   WAKE_MAX_AGE,
   WAKE_SPAWN_INTERVAL,
+  BOAT_MIN_ZOOM_FAR,
 } from './constants';
 import { gridToScreen } from './utils';
 import { findMarinasAndPiers, findAdjacentWaterTile, isOverWater, generateTourWaypoints } from './gridFinders';
@@ -63,8 +64,9 @@ export function useBoatSystem(
       return;
     }
 
-    // Clear boats if zoomed out too far
-    if (currentZoom < BOAT_MIN_ZOOM) {
+    // Clear boats if zoomed out too far (use far threshold for large map support)
+    const effectiveMinZoom = Math.max(BOAT_MIN_ZOOM, BOAT_MIN_ZOOM_FAR);
+    if (currentZoom < effectiveMinZoom) {
       boatsRef.current = [];
       return;
     }

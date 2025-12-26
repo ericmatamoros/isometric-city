@@ -812,6 +812,27 @@ function generateUUID(): string {
 export function createInitialGameState(size: number = DEFAULT_GRID_SIZE, cityName: string = 'New City'): GameState {
   const { grid, waterBodies } = generateTerrain(size);
   const adjacentCities = generateAdjacentCities();
+  
+  // Create a default city covering the entire map
+  const defaultCity: import('@/types/game').City = {
+    id: generateUUID(),
+    name: cityName,
+    bounds: {
+      minX: 0,
+      minY: 0,
+      maxX: size - 1,
+      maxY: size - 1,
+    },
+    economy: {
+      population: 0,
+      jobs: 0,
+      income: 0,
+      expenses: 0,
+      happiness: 50,
+      lastCalculated: 0,
+    },
+    color: '#3b82f6',
+  };
 
   return {
     id: generateUUID(),
@@ -838,6 +859,7 @@ export function createInitialGameState(size: number = DEFAULT_GRID_SIZE, cityNam
     adjacentCities,
     waterBodies,
     gameVersion: 0,
+    cities: [defaultCity],
   };
 }
 
