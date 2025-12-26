@@ -405,9 +405,9 @@ export const ToolIcons: Partial<Record<Tool, React.FC<IconProps>>> = {
   rail: RailIcon,
   subway: SubwayIcon,
   tree: TreeIcon,
-  zone_residential: (props) => <ZoneIcon {...props} color="#22c55e" />, 
-  zone_commercial: (props) => <ZoneIcon {...props} color="#38bdf8" />, 
-  zone_industrial: (props) => <ZoneIcon {...props} color="#f59e0b" />, 
+  zone_residential: (props) => <ZoneIcon {...props} color="#22c55e" />,
+  zone_commercial: (props) => <ZoneIcon {...props} color="#38bdf8" />,
+  zone_industrial: (props) => <ZoneIcon {...props} color="#f59e0b" />,
   zone_dezone: (props) => <ZoneIcon {...props} color="#94a3b8" />,
   zone_water: (props) => <ZoneIcon {...props} color="#06b6d4" />,
   zone_land: (props) => <ZoneIcon {...props} color="#059669" />,
@@ -427,3 +427,19 @@ export const ToolIcons: Partial<Record<Tool, React.FC<IconProps>>> = {
   amusement_park: AmusementParkIcon,
 };
 
+export function SecurityIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className}>
+      <path {...baseStroke} d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      <path {...baseStroke} d="M12 8v4M12 16h.01" />
+    </svg>
+  );
+}
+
+export function BankIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className}>
+      <path {...baseStroke} d="M3 21h18M3 10h18M5 10v11M19 10v11M12 10v11M7 10v11M17 10v11M12 3l9 7H3l9-7z" />
+    </svg>
+  );
+}

@@ -273,6 +273,9 @@ export interface Building {
   forSale?: boolean; // Is this property for sale?
   price?: number; // Sale price
   lastRentCollected?: string; // ISO timestamp of last rent collection
+  // Security system
+  hasAlarm?: boolean; // Whether building has alarm protection
+  alarmExpiresAt?: number; // In-game tick when alarm expires
 }
 
 // City definition for multi-city maps
@@ -314,6 +317,7 @@ export interface Tile {
   traffic: number;
   hasSubway: boolean;
   hasRailOverlay?: boolean; // Rail tracks overlaid on road (road base with rail tracks on top)
+  dynamicValue?: number; // Dynamically calculated land value based on surroundings
 }
 
 export interface Stats {
@@ -427,6 +431,35 @@ export interface LeaderboardEntry {
   isCurrentUser: boolean;
 }
 
+// Robbery event for security system
+export interface RobberyEvent {
+  x: number;
+  y: number;
+  amount: number;
+  wasProtected: boolean;
+  timestamp: number; // In-game tick
+  ownerAddress?: string;
+}
+
+// Fine event for corrupted police system
+export interface FineEvent {
+  type: 'fine' | 'bribe';
+  amount: number;
+  reason: string;
+  timestamp: number; // In-game tick
+}
+
+// Loan from City Bank
+export interface Loan {
+  id: string;
+  principal: number; // Original amount borrowed
+  interestRate: number; // e.g., 0.05 = 5%
+  outstanding: number; // Current balance owed
+  createdAt: number; // In-game tick
+  dueAt: number; // In-game tick when payment is due
+  repaid: boolean;
+}
+
 export interface GameState {
   id: string; // Unique UUID for this game
   grid: Tile[][];
@@ -447,7 +480,7 @@ export interface GameState {
   notifications: Notification[];
   advisorMessages: AdvisorMessage[];
   history: HistoryPoint[];
-  activePanel: 'none' | 'budget' | 'statistics' | 'advisors' | 'settings';
+  activePanel: 'none' | 'budget' | 'statistics' | 'advisors' | 'settings' | 'security' | 'bank';
   disastersEnabled: boolean;
   adjacentCities: AdjacentCity[];
   waterBodies: WaterBody[];
@@ -457,6 +490,11 @@ export interface GameState {
   leaderboard?: LeaderboardEntry[]; // Top players by wealth
   floatingTexts: FloatingText[]; // Active floating text animations
   activityLog: ActivityLogEntry[]; // Recent global events
+  // Advanced Economy
+  robberyLog: RobberyEvent[]; // Recent robbery events
+  fineLog: FineEvent[]; // Recent fines and bribes
+  playerLoans: Loan[]; // Active loans from City Bank
+  policeProtectionUntil?: number; // In-game tick when police immunity expires
 }
 
 // Saved city metadata for the multi-save system

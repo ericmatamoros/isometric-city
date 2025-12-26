@@ -51,6 +51,110 @@ function isStarterBuilding(x: number, y: number, buildingType: string): boolean 
   return false;
 }
 
+// Service buildings that boost land value when nearby
+const SERVICE_BOOST_BUILDINGS = [
+  'police_station', 'fire_station', 'hospital', 'school', 'university',
+  'subway_station', 'rail_station', 'water_tower', 'power_plant'
+];
+
+// High-value buildings that boost land value when nearby
+const HIGH_VALUE_BUILDINGS = [
+  'stadium', 'museum', 'airport', 'city_hall', 'amusement_park',
+  'mall', 'office_high', 'apartment_high', 'space_program',
+  'global_market', 'central_bank', 'trade_embassy'
+];
+
+// Parks and recreation that boost residential land value
+const PARK_BUILDINGS = [
+  'park', 'park_large', 'tennis', 'tree', 'community_garden', 'pond_park',
+  'playground_small', 'playground_large', 'swimming_pool', 'amphitheater'
+];
+
+// Pollution sources that decrease land value
+const POLLUTION_BUILDINGS = [
+  'factory_small', 'factory_medium', 'factory_large', 'warehouse', 'power_plant'
+];
+
+/**
+ * Calculate dynamic land value for a tile based on proximity to services,
+ * high-value buildings, parks, and pollution sources.
+ * Base value is 100, modified by bonuses and penalties.
+ */
+export function calculateDynamicLandValue(
+  tile: Tile,
+  grid: Tile[][],
+  gridSize: number
+): number {
+  let value = 100; // Base land value
+
+  const SEARCH_RADIUS = 8; // How far to look for nearby buildings
+
+  // Helper to calculate distance bonus (closer = higher bonus)
+  const distanceBonus = (dist: number, maxBonus: number) => {
+    if (dist === 0) return maxBonus;
+    return Math.max(0, maxBonus * (1 - dist / SEARCH_RADIUS));
+  };
+
+  // Scan nearby tiles
+  for (let dy = -SEARCH_RADIUS; dy <= SEARCH_RADIUS; dy++) {
+    for (let dx = -SEARCH_RADIUS; dx <= SEARCH_RADIUS; dx++) {
+      const nx = tile.x + dx;
+      const ny = tile.y + dy;
+
+      // Skip out of bounds
+      if (nx < 0 || nx >= gridSize || ny < 0 || ny >= gridSize) continue;
+      if (dx === 0 && dy === 0) continue; // Skip self
+
+      const nearbyTile = grid[ny][nx];
+      const buildingType = nearbyTile.building?.type;
+      if (!buildingType) continue;
+
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > SEARCH_RADIUS) continue;
+
+      // Service buildings: +20 max bonus
+      if (SERVICE_BOOST_BUILDINGS.includes(buildingType)) {
+        value += distanceBonus(dist, 20);
+      }
+
+      // High-value buildings: +30 max bonus
+      if (HIGH_VALUE_BUILDINGS.includes(buildingType)) {
+        value += distanceBonus(dist, 30);
+      }
+
+      // Parks: +15 max bonus
+      if (PARK_BUILDINGS.includes(buildingType)) {
+        value += distanceBonus(dist, 15);
+      }
+
+      // Pollution sources: -25 max penalty
+      if (POLLUTION_BUILDINGS.includes(buildingType)) {
+        value -= distanceBonus(dist, 25);
+      }
+
+      // Water tiles: +10 max bonus (waterfront property)
+      if (buildingType === 'water') {
+        value += distanceBonus(dist, 10);
+      }
+
+      // Roads: +5 max bonus (accessibility)
+      if (buildingType === 'road' && dist <= 2) {
+        value += distanceBonus(dist, 5);
+      }
+    }
+  }
+
+  // Apply zone-specific multipliers
+  if (tile.zone === 'commercial') {
+    value *= 1.2; // Commercial land is more valuable
+  } else if (tile.zone === 'industrial') {
+    value *= 0.8; // Industrial land is less valuable
+  }
+
+  // Ensure minimum value of 10
+  return Math.max(10, Math.round(value));
+}
+
 // Perlin-like noise for terrain generation
 function noise2D(x: number, y: number, seed: number = 42): number {
   const n = Math.sin(x * 12.9898 + y * 78.233 + seed) * 43758.5453123;
@@ -1492,6 +1596,10 @@ export function createInitialGameState(size: number = DEFAULT_GRID_SIZE, cityNam
     cities: [defaultCity],
     floatingTexts: [],
     activityLog: [],
+    // Advanced Economy
+    robberyLog: [],
+    fineLog: [],
+    playerLoans: [],
   };
 }
 
@@ -2217,13 +2325,13 @@ function calculateStats(grid: Tile[][], size: number, budget: Budget, taxRate: n
   // Base tax rate is 9%, so we calculate relative to that
   // Uses effectiveTaxRate (lagged) so changes don't impact demand immediately
 
-  // Tax multiplier: 1.0 at 0% tax, ~1.0 at 9% tax, 0.0 at 100% tax
+  // Tax multiplier: 1.0 at 0% tax, ~1.0 at 9% tax, 0.0 at 59% tax (was 100%)
   // This ensures high taxes dramatically reduce demand regardless of other factors
-  const taxMultiplier = Math.max(0, 1 - (effectiveTaxRate - 9) / 91);
+  const taxMultiplier = Math.max(0, 1 - (effectiveTaxRate - 9) / 50);
 
   // Small additive modifier for fine-tuning around base rate
-  // At 9% tax: 0. At 0% tax: +18. At 20% tax: -22
-  const taxAdditiveModifier = (9 - effectiveTaxRate) * 2;
+  // At 9% tax: 0. At 0% tax: +36 (was +18). At 20% tax: -44 (was -22)
+  const taxAdditiveModifier = (9 - effectiveTaxRate) * 4;
 
   const subwayBonus = Math.min(20, subwayTiles * 0.5 + subwayStations * 3);
 

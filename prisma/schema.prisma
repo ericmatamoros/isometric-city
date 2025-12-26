@@ -16,10 +16,12 @@ model User {
   
   // Economy
   balance       Float     @default(10000) // Starting money
+  policeProtectionUntil DateTime? // For corrupted police system immunity
   
   // Relations
   ownedTiles    Tile[]
   transactions  Transaction[]
+  loans         Loan[]        @relation("Borrower")
 }
 
 model World {
@@ -27,6 +29,7 @@ model World {
   name      String
   width     Int
   height    Int
+  taxRate   Float    @default(0.1) // Default 10% tax
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
@@ -52,6 +55,7 @@ model Tile {
   price     Float?
   lastRentCollected DateTime?   // If set, it's for sale
   rentPrice Float?   // Cost to use/rent
+  alarmExpiresAt DateTime? // For security system protection
   
   @@unique([worldId, x, y])
 }
@@ -65,4 +69,16 @@ model Transaction {
   // Relations
   userId    String
   user      User     @relation(fields: [userId], references: [id])
+}
+
+model Loan {
+  id            String   @id @default(uuid())
+  borrowerId    String
+  borrower      User     @relation("Borrower", fields: [borrowerId], references: [id])
+  principal     Float    // Original amount borrowed
+  interestRate  Float    // Interest rate (e.g., 0.05 = 5%)
+  outstanding   Float    // Current balance owed
+  createdAt     DateTime @default(now())
+  dueAt         DateTime // When payment is due
+  repaid        Boolean  @default(false)
 }

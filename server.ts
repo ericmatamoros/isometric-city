@@ -49,6 +49,187 @@ app.prepare().then(() => {
         }
     }, 10000);
 
+    // ====================================================================
+    // ROBBERY TICK - Stochastic building robberies
+    // ====================================================================
+    // Track in-memory state for alarm/police protection (persisted through server restart via reconnect)
+    const playerPoliceProtection: Map<string, number> = new Map(); // walletAddress -> expiration timestamp
+    const buildingAlarms: Map<string, number> = new Map(); // "worldId:x:y" -> expiration timestamp
+
+    setInterval(async () => {
+        try {
+            // Get all owned tiles with commercial or residential buildings
+            const ownedTiles = await prisma.tile.findMany({
+                where: {
+                    ownerId: { not: null },
+                    OR: [
+                        { type: { contains: 'shop' } },
+                        { type: { contains: 'house' } },
+                        { type: { contains: 'office' } },
+                        { type: { contains: 'mall' } },
+                        { type: { contains: 'apartment' } }
+                    ]
+                },
+                include: { owner: true }
+            });
+
+            if (ownedTiles.length === 0) return;
+
+            // 5% chance per tick that a robbery attempt occurs
+            if (Math.random() > 0.05) return;
+
+            // Select a random building
+            const targetTile = ownedTiles[Math.floor(Math.random() * ownedTiles.length)];
+            const tileKey = `${targetTile.worldId}:${targetTile.x}:${targetTile.y}`;
+            const alarmExpiry = buildingAlarms.get(tileKey) || 0;
+            const now = Date.now();
+
+            // Calculate robbery amount (5-15% of estimated building value)
+            const baseValue = 500; // Base value per building
+            const robberyPercent = 0.05 + Math.random() * 0.1; // 5-15%
+            const robberyAmount = Math.round(baseValue * robberyPercent);
+
+            if (alarmExpiry > now) {
+                // Alarm protected - robbery thwarted
+                io.to(targetTile.worldId).emit("robbery_event", {
+                    x: targetTile.x,
+                    y: targetTile.y,
+                    ownerAddress: targetTile.owner?.walletAddress,
+                    amount: 0,
+                    wasProtected: true,
+                    message: "Robbery attempt thwarted by alarm system!"
+                });
+                console.log(`Robbery thwarted at ${targetTile.x},${targetTile.y} - alarm protected`);
+            } else {
+                // Robbery succeeds - deduct from owner
+                if (targetTile.owner && targetTile.owner.balance >= robberyAmount) {
+                    await prisma.user.update({
+                        where: { id: targetTile.owner.id },
+                        data: { balance: { decrement: robberyAmount } }
+                    });
+
+                    io.to(targetTile.worldId).emit("robbery_event", {
+                        x: targetTile.x,
+                        y: targetTile.y,
+                        ownerAddress: targetTile.owner.walletAddress,
+                        amount: robberyAmount,
+                        wasProtected: false,
+                        message: `Robbery! Lost $${robberyAmount}`
+                    });
+                    console.log(`Robbery at ${targetTile.x},${targetTile.y} - $${robberyAmount} stolen from ${targetTile.owner.walletAddress}`);
+                }
+            }
+        } catch (e) {
+            console.error("Error in robbery tick:", e);
+        }
+    }, 15000); // Every 15 seconds
+
+    // ====================================================================
+    // POLICE FINE TICK - Corrupted police fines
+    // ====================================================================
+    const FINE_REASONS = [
+        "Unpermitted Construction",
+        "Noise Complaint",
+        "Tax Irregularity",
+        "Building Code Violation",
+        "Zoning Violation",
+        "Environmental Infraction",
+        "Traffic Obstruction"
+    ];
+
+    setInterval(async () => {
+        try {
+            // Get all users with positive balance
+            const users = await prisma.user.findMany({
+                where: { balance: { gt: 0 } }
+            });
+
+            if (users.length === 0) return;
+
+            // 3% chance per tick that a fine occurs
+            if (Math.random() > 0.03) return;
+
+            // Select a random user
+            const targetUser = users[Math.floor(Math.random() * users.length)];
+            const now = Date.now();
+            const protectionExpiry = playerPoliceProtection.get(targetUser.walletAddress) || 0;
+
+            // Calculate fine amount ($50-$200)
+            const fineAmount = 50 + Math.round(Math.random() * 150);
+            const reason = FINE_REASONS[Math.floor(Math.random() * FINE_REASONS.length)];
+
+            if (protectionExpiry > now) {
+                // Protected by bribe - fine avoided
+                io.emit("fine_event", {
+                    type: "avoided",
+                    targetAddress: targetUser.walletAddress,
+                    amount: 0,
+                    reason,
+                    message: "Police fine avoided due to... connections."
+                });
+                console.log(`Fine avoided by ${targetUser.walletAddress} - bribe protection active`);
+            } else {
+                // Fine applied
+                if (targetUser.balance >= fineAmount) {
+                    await prisma.user.update({
+                        where: { id: targetUser.id },
+                        data: { balance: { decrement: fineAmount } }
+                    });
+
+                    io.emit("fine_event", {
+                        type: "fine",
+                        targetAddress: targetUser.walletAddress,
+                        amount: fineAmount,
+                        reason,
+                        message: `Fine: $${fineAmount} for ${reason}`
+                    });
+                    console.log(`Fine issued to ${targetUser.walletAddress}: $${fineAmount} for ${reason}`);
+                }
+            }
+        } catch (e) {
+            console.error("Error in police fine tick:", e);
+        }
+    }, 20000); // Every 20 seconds
+
+    // ====================================================================
+    // LOAN INTEREST TICK - Accrue interest on outstanding loans
+    // ====================================================================
+    setInterval(async () => {
+        try {
+            // Get all unpaid loans
+            const loans = await (prisma as any).loan.findMany({
+                where: { repaid: false },
+                include: { borrower: true }
+            });
+
+            for (const loan of loans) {
+                // Daily interest (simplified: applied every 30 seconds for demo)
+                // In production, this would be based on actual time elapsed
+                const dailyRate = loan.interestRate / 365;
+                const interestAmount = loan.outstanding * dailyRate;
+                const newOutstanding = loan.outstanding + interestAmount;
+
+                await (prisma as any).loan.update({
+                    where: { id: loan.id },
+                    data: { outstanding: newOutstanding }
+                });
+
+                // Check if loan is overdue (dueAt is in the past)
+                if (new Date() > loan.dueAt && loan.borrower) {
+                    // Emit warning to borrower
+                    io.emit("loan_overdue", {
+                        loanId: loan.id,
+                        borrowerAddress: loan.borrower.walletAddress,
+                        outstanding: newOutstanding,
+                        dueAt: loan.dueAt
+                    });
+                }
+            }
+        } catch (e) {
+            console.error("Error in loan interest tick:", e);
+        }
+    }, 30000); // Every 30 seconds (represents daily interest accrual)
+
     io.on("connection", (socket) => {
         console.log("Client connected:", socket.id);
 
@@ -162,6 +343,98 @@ app.prepare().then(() => {
             }
         });
 
+        // Handle claiming an unowned tile (initial land acquisition with dynamic pricing)
+        socket.on("claim_tile", async (data) => {
+            const { worldId, x, y, buyerAddress, dynamicValue } = data;
+
+            try {
+                const buyer = await prisma.user.findUnique({ where: { walletAddress: buyerAddress } });
+                if (!buyer) {
+                    socket.emit("error", { message: "User not found" });
+                    return;
+                }
+
+                // Check if tile exists and is unowned
+                const existingTile = await prisma.tile.findUnique({
+                    where: { worldId_x_y: { worldId, x, y } }
+                });
+
+                if (existingTile && existingTile.ownerId) {
+                    socket.emit("error", { message: "Tile already owned" });
+                    return;
+                }
+
+                // Use provided dynamic value or default to 100
+                const price = dynamicValue || 100;
+
+                if (buyer.balance < price) {
+                    socket.emit("error", { message: "Insufficient funds" });
+                    return;
+                }
+
+                // Execute transaction
+                await prisma.$transaction([
+                    // Deduct from buyer
+                    prisma.user.update({
+                        where: { id: buyer.id },
+                        data: { balance: { decrement: price } }
+                    }),
+                    // Create or update tile with ownership
+                    (prisma as any).tile.upsert({
+                        where: { worldId_x_y: { worldId, x, y } },
+                        create: {
+                            worldId,
+                            x,
+                            y,
+                            type: 'grass',
+                            ownerId: buyer.id,
+                            forSale: false
+                        },
+                        update: {
+                            ownerId: buyer.id,
+                            forSale: false
+                        }
+                    }),
+                    // Record transaction
+                    prisma.transaction.create({
+                        data: {
+                            amount: -price,
+                            type: 'land_claim',
+                            userId: buyer.id
+                        }
+                    })
+                ]);
+
+                // Broadcast update
+                io.to(worldId).emit("tile_claimed", {
+                    x,
+                    y,
+                    ownerAddress: buyerAddress,
+                    price
+                });
+
+                // Emit updated balance to buyer
+                const updatedBuyer = await prisma.user.findUnique({ where: { id: buyer.id } });
+                socket.emit("balance_update", { balance: updatedBuyer?.balance || 0 });
+
+                // Emit activity log
+                io.to(worldId).emit("activity", {
+                    type: "claim",
+                    ownerAddress: buyerAddress,
+                    x,
+                    y,
+                    price,
+                    timestamp: Date.now()
+                });
+
+                console.log(`Tile at ${x},${y} claimed by ${buyerAddress} for $${price}`);
+
+            } catch (e) {
+                console.error("Failed to claim tile:", e);
+                socket.emit("error", { message: "Failed to claim tile" });
+            }
+        });
+
         // Handle selling a tile
         socket.on("sell_tile", async (data) => {
             const { worldId, x, y, price, ownerAddress } = data;
@@ -180,7 +453,7 @@ app.prepare().then(() => {
                 }
 
                 // Update tile status
-                await prisma.tile.update({
+                await (prisma as any).tile.update({
                     where: { worldId_x_y: { worldId, x, y } },
                     data: { forSale: true, price: parseFloat(price) }
                 });
@@ -231,7 +504,7 @@ app.prepare().then(() => {
                         data: { balance: { increment: tile.price } }
                     }),
                     // Transfer ownership
-                    prisma.tile.update({
+                    (prisma as any).tile.update({
                         where: { worldId_x_y: { worldId, x, y } },
                         data: {
                             ownerId: buyer.id,
@@ -340,19 +613,25 @@ app.prepare().then(() => {
                 if (tile.type.includes('large')) rentAmount *= 2;
                 if (tile.type.includes('skyscraper')) rentAmount *= 5;
 
+                // Fetch world tax rate
+                const world = await prisma.world.findUnique({ where: { id: worldId } }) as any;
+                const taxRate = world?.taxRate || 0.1;
+                const taxDeduction = Math.round(rentAmount * taxRate);
+                const netRent = rentAmount - taxDeduction;
+
                 // Execute transaction
                 await prisma.$transaction([
                     prisma.user.update({
                         where: { id: user.id },
-                        data: { balance: { increment: rentAmount } }
+                        data: { balance: { increment: netRent } }
                     }),
-                    prisma.tile.update({
+                    (prisma as any).tile.update({
                         where: { worldId_x_y: { worldId, x, y } },
                         data: { lastRentCollected: now }
                     }),
                     prisma.transaction.create({
                         data: {
-                            amount: rentAmount,
+                            amount: netRent,
                             type: 'rent',
                             userId: user.id
                         }
@@ -361,12 +640,291 @@ app.prepare().then(() => {
 
                 // Send updated balance
                 const updatedUser = await prisma.user.findUnique({ where: { id: user.id } });
-                socket.emit("balance_update", updatedUser?.balance);
-                socket.emit("rent_collected", { x, y, amount: rentAmount });
+                socket.emit("balance_update", { balance: updatedUser?.balance || 0 });
+                socket.emit("rent_collected", { x, y, amount: netRent, tax: taxDeduction });
+
+                console.log(`Rent collected at ${x},${y} by ${ownerAddress}: $${netRent} (Tax: $${taxDeduction})`);
 
             } catch (e) {
                 console.error("Failed to collect rent:", e);
                 socket.emit("error", { message: "Failed to collect rent" });
+            }
+        });
+
+        // ====================================================================
+        // ALARM SUBSCRIPTION
+        // ====================================================================
+        socket.on("subscribe_alarm", async (data) => {
+            const { worldId, x, y, ownerAddress, duration } = data;
+
+            try {
+                const user = await prisma.user.findUnique({ where: { walletAddress: ownerAddress } });
+                if (!user) {
+                    socket.emit("error", { message: "User not found" });
+                    return;
+                }
+
+                // Verify ownership
+                const tile = await prisma.tile.findUnique({
+                    where: { worldId_x_y: { worldId, x, y } }
+                });
+
+                if (!tile || tile.ownerId !== user.id) {
+                    socket.emit("error", { message: "You don't own this property" });
+                    return;
+                }
+
+                // Cost calculation: $100 per 7-day period (default)
+                const durationMs = (duration || 7) * 24 * 60 * 60 * 1000; // Days to milliseconds
+                const cost = Math.round((duration || 7) / 7) * 100;
+
+                if (user.balance < cost) {
+                    socket.emit("error", { message: "Insufficient funds for alarm subscription" });
+                    return;
+                }
+
+                // Deduct cost and set alarm
+                await prisma.user.update({
+                    where: { id: user.id },
+                    data: { balance: { decrement: cost } }
+                });
+
+                const expiryTime = new Date(Date.now() + durationMs);
+
+                // Persist to DB
+                await (prisma as any).tile.update({
+                    where: { worldId_x_y: { worldId, x, y } },
+                    data: { alarmExpiresAt: expiryTime }
+                });
+
+                const tileKey = `${worldId}:${x}:${y}`;
+                buildingAlarms.set(tileKey, expiryTime.getTime());
+
+                // Send confirmation
+                socket.emit("alarm_subscribed", {
+                    x,
+                    y,
+                    expiresAt: expiryTime,
+                    cost
+                });
+
+                const updatedUser = await prisma.user.findUnique({ where: { id: user.id } });
+                socket.emit("balance_update", { balance: updatedUser?.balance || 0 });
+
+                console.log(`Alarm subscribed for ${x},${y} by ${ownerAddress} until ${new Date(expiryTime).toISOString()}`);
+
+            } catch (e) {
+                console.error("Failed to subscribe alarm:", e);
+                socket.emit("error", { message: "Failed to subscribe to alarm" });
+            }
+        });
+
+        // ====================================================================
+        // POLICE BRIBE
+        // ====================================================================
+        socket.on("pay_police_bribe", async (data) => {
+            const { ownerAddress, duration } = data;
+
+            try {
+                const user = await prisma.user.findUnique({ where: { walletAddress: ownerAddress } });
+                if (!user) {
+                    socket.emit("error", { message: "User not found" });
+                    return;
+                }
+
+                // Cost calculation: $500 per 7-day period (default)
+                const durationMs = (duration || 7) * 24 * 60 * 60 * 1000;
+                const cost = Math.round((duration || 7) / 7) * 500;
+
+                if (user.balance < cost) {
+                    socket.emit("error", { message: "Insufficient funds for... donations" });
+                    return;
+                }
+
+                // Deduct cost and set protection
+                await prisma.user.update({
+                    where: { id: user.id },
+                    data: { balance: { decrement: cost } }
+                });
+
+                const expiryTime = new Date(Date.now() + durationMs);
+
+                // Persist to DB
+                await (prisma as any).user.update({
+                    where: { id: user.id },
+                    data: { policeProtectionUntil: expiryTime }
+                });
+
+                playerPoliceProtection.set(ownerAddress, expiryTime.getTime());
+
+                // Send confirmation
+                socket.emit("police_bribe_accepted", {
+                    expiresAt: expiryTime,
+                    cost
+                });
+
+                const updatedUser = await prisma.user.findUnique({ where: { id: user.id } });
+                socket.emit("balance_update", { balance: updatedUser?.balance || 0 });
+
+                io.emit("activity", {
+                    type: "bribe",
+                    ownerAddress,
+                    amount: cost,
+                    timestamp: Date.now()
+                });
+
+                console.log(`Police bribe paid by ${ownerAddress}: $${cost} for protection until ${new Date(expiryTime).toISOString()}`);
+
+            } catch (e) {
+                console.error("Failed to process police bribe:", e);
+                socket.emit("error", { message: "Failed to process payment" });
+            }
+        });
+
+        // ====================================================================
+        // LOAN REQUEST
+        // ====================================================================
+        socket.on("request_loan", async (data) => {
+            const { ownerAddress, amount } = data;
+
+            try {
+                const user = await prisma.user.findUnique({ where: { walletAddress: ownerAddress } });
+                if (!user) {
+                    socket.emit("error", { message: "User not found" });
+                    return;
+                }
+
+                // Loan limits (e.g., max $50,000 or based on net worth)
+                const maxLoan = 50000;
+                if (amount > maxLoan) {
+                    socket.emit("error", { message: `Maximum loan amount is $${maxLoan}` });
+                    return;
+                }
+
+                // Interest rate: 5% base
+                const interestRate = 0.05;
+                const dueAt = new Date();
+                dueAt.setDate(dueAt.getDate() + 30); // 30 days due date
+
+                // Create loan and credit user
+                const loan = await (prisma as any).loan.create({
+                    data: {
+                        borrowerId: user.id,
+                        principal: amount,
+                        interestRate,
+                        outstanding: amount,
+                        dueAt,
+                        repaid: false
+                    }
+                });
+
+                await prisma.user.update({
+                    where: { id: user.id },
+                    data: { balance: { increment: amount } }
+                });
+
+                // Record transaction
+                await prisma.transaction.create({
+                    data: {
+                        amount,
+                        type: 'loan_disbursement',
+                        userId: user.id
+                    }
+                });
+
+                socket.emit("loan_approved", {
+                    loanId: loan.id,
+                    amount,
+                    interestRate,
+                    dueAt: loan.dueAt
+                });
+
+                const updatedUser = await prisma.user.findUnique({ where: { id: user.id } });
+                socket.emit("balance_update", { balance: updatedUser?.balance || 0 });
+
+                io.emit("activity", {
+                    type: "loan",
+                    ownerAddress,
+                    amount,
+                    timestamp: Date.now()
+                });
+
+                console.log(`Loan of $${amount} approved for ${ownerAddress}`);
+
+            } catch (e) {
+                console.error("Failed to process loan request:", e);
+                socket.emit("error", { message: "Failed to process loan request" });
+            }
+        });
+
+        // ====================================================================
+        // LOAN REPAYMENT
+        // ====================================================================
+        socket.on("repay_loan", async (data) => {
+            const { ownerAddress, loanId, amount } = data;
+
+            try {
+                const user = await prisma.user.findUnique({ where: { walletAddress: ownerAddress } });
+                if (!user) {
+                    socket.emit("error", { message: "User not found" });
+                    return;
+                }
+
+                const loan = await (prisma as any).loan.findUnique({
+                    where: { id: loanId }
+                });
+
+                if (!loan || loan.borrowerId !== user.id || loan.repaid) {
+                    socket.emit("error", { message: "Loan not found or already repaid" });
+                    return;
+                }
+
+                const repayAmount = Math.min(amount, loan.outstanding);
+
+                if (user.balance < repayAmount) {
+                    socket.emit("error", { message: "Insufficient funds for repayment" });
+                    return;
+                }
+
+                const newOutstanding = loan.outstanding - repayAmount;
+                const isFullyRepaid = newOutstanding < 1; // Tolerance for floating point
+
+                await prisma.$transaction([
+                    prisma.user.update({
+                        where: { id: user.id },
+                        data: { balance: { decrement: repayAmount } }
+                    }),
+                    (prisma as any).loan.update({
+                        where: { id: loanId },
+                        data: {
+                            outstanding: isFullyRepaid ? 0 : newOutstanding,
+                            repaid: isFullyRepaid
+                        }
+                    }),
+                    prisma.transaction.create({
+                        data: {
+                            amount: -repayAmount,
+                            type: 'loan_repayment',
+                            userId: user.id
+                        }
+                    })
+                ]);
+
+                socket.emit("loan_repaid", {
+                    loanId,
+                    amount: repayAmount,
+                    remaining: isFullyRepaid ? 0 : newOutstanding,
+                    repaid: isFullyRepaid
+                });
+
+                const updatedUser = await prisma.user.findUnique({ where: { id: user.id } });
+                socket.emit("balance_update", { balance: updatedUser?.balance || 0 });
+
+                console.log(`Loan repayment of $${repayAmount} by ${ownerAddress}. Remaining: ${newOutstanding}`);
+
+            } catch (e) {
+                console.error("Failed to process loan repayment:", e);
+                socket.emit("error", { message: "Failed to process repayment" });
             }
         });
 

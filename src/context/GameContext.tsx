@@ -14,6 +14,9 @@ import {
   Tool,
   TOOL_INFO,
   ZoneType,
+  RobberyEvent,
+  FineEvent,
+  Loan,
 } from '@/types/game';
 import {
   bulldozeTile,
@@ -823,13 +826,90 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       }));
     });
 
-    socket.on('balance_update', (balance: number) => {
+    socket.on('balance_update', (data: number | { balance: number }) => {
+      const balance = typeof data === 'number' ? data : data.balance;
       setState(prev => ({ ...prev, playerBalance: balance }));
     });
 
-    socket.on('rent_collected', (data: { x: number; y: number; amount: number }) => {
-      addNotification('Income', `Collected $${data.amount} rent from property at ${data.x},${data.y}`, 'success');
+    socket.on('rent_collected', (data: { x: number; y: number; amount: number; tax?: number }) => {
+      const taxMsg = data.tax ? ` (Tax: $${data.tax})` : '';
+      addNotification('Income', `Collected $${data.amount} rent from property at ${data.x},${data.y}${taxMsg}`, 'success');
       addFloatingText(data.x, data.y, `+$${data.amount}`, '#10b981');
+    });
+
+    socket.on('robbery_event', (data: RobberyEvent) => {
+      setState(prev => ({
+        ...prev,
+        robberyLog: [data, ...(prev.robberyLog || [])].slice(0, 20)
+      }));
+
+      if (data.wasProtected) {
+        addNotification('Security', `Robbery thwarted at (${data.x}, ${data.y})!`, 'info');
+        addFloatingText(data.x, data.y, '🛡️ Thwarted', '#3b82f6');
+      } else {
+        addNotification('Security', `Robbery! Lost $${data.amount} at (${data.x}, ${data.y})`, 'alert');
+        addFloatingText(data.x, data.y, `-$${data.amount} 💰`, '#ef4444');
+      }
+    });
+
+    socket.on('fine_event', (data: any) => {
+      const event: FineEvent = {
+        type: data.type === 'bribe' ? 'bribe' : 'fine',
+        amount: data.amount,
+        reason: data.reason || data.message,
+        timestamp: Date.now()
+      };
+
+      setState(prev => ({
+        ...prev,
+        fineLog: [event, ...(prev.fineLog || [])].slice(0, 20)
+      }));
+
+      if (data.type === 'avoided') {
+        addNotification('Police', `Fine avoided: ${data.reason}`, 'info');
+      } else {
+        addNotification('Police', `Fine: $${data.amount} - ${data.reason}`, 'alert');
+      }
+    });
+
+    socket.on('loan_approved', (data: Loan) => {
+      setState(prev => ({
+        ...prev,
+        playerLoans: [data, ...(prev.playerLoans || [])]
+      }));
+      addNotification('Bank', `Loan of $${data.principal} approved!`, 'success');
+    });
+
+    socket.on('loan_repaid', (data: { loanId: string; amount: number; remaining: number; repaid: boolean }) => {
+      setState(prev => ({
+        ...prev,
+        playerLoans: (prev.playerLoans || []).map(loan =>
+          loan.id === data.loanId
+            ? { ...loan, outstanding: data.remaining, repaid: data.repaid }
+            : loan
+        )
+      }));
+      addNotification('Bank', `Repaid $${data.amount} towards loan.`, 'success');
+    });
+
+    socket.on('loan_overdue', (data: any) => {
+      addNotification('Bank', `LOAN OVERDUE: $${Math.round(data.outstanding)} is due!`, 'alert');
+    });
+
+    socket.on('tile_claimed', (data: { x: number; y: number; ownerId: string; type: string }) => {
+      setState(prev => {
+        const newGrid = [...prev.grid];
+        newGrid[data.y] = [...prev.grid[data.y]];
+        newGrid[data.y][data.x] = {
+          ...newGrid[data.y][data.x],
+          building: {
+            ...newGrid[data.y][data.x].building,
+            ownerId: data.ownerId
+          }
+        };
+        return { ...prev, grid: newGrid };
+      });
+      addNotification('Land', `Property at ${data.x},${data.y} claimed.`, 'info');
     });
 
     socket.on('leaderboard_update', (leaderboard: LeaderboardEntry[]) => {
@@ -849,11 +929,14 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       socket.off('tile_for_sale');
       socket.off('tile_sold');
       socket.off('transaction_complete');
-      socket.off('transaction_complete');
       socket.off('balance_update');
       socket.off('rent_collected');
-      socket.off('leaderboard_update');
-      socket.off('rent_collected');
+      socket.off('robbery_event');
+      socket.off('fine_event');
+      socket.off('loan_approved');
+      socket.off('loan_repaid');
+      socket.off('loan_overdue');
+      socket.off('tile_claimed');
       socket.off('leaderboard_update');
       socket.off('activity');
       socket.off('error');

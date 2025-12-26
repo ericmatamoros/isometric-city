@@ -5,3 +5,5 @@ export { AdvisorsPanel } from './AdvisorsPanel';
 export { SpriteTestPanel } from './SpriteTestPanel';
 export { TileInfoPanel } from './TileInfoPanel';
 export { default as LeaderboardPanel } from './LeaderboardPanel';
+export { SecurityPanel } from './SecurityPanel';
+export { BankPanel } from './BankPanel';
