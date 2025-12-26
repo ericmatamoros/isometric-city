@@ -9,7 +9,9 @@
     "start": "next start",
     "lint": "eslint .",
     "crop-screenshots": "bash scripts/crop-screenshots.sh",
-    "compress-images": "node scripts/compress-images.mjs"
+    "compress-images": "node scripts/compress-images.mjs",
+    "test": "vitest",
+    "test:ui": "vitest --ui"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.2",
@@ -40,6 +42,7 @@
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/ui": "^4.0.16",
     "autoprefixer": "^10.4.22",
     "baseline-browser-mapping": "^2.9.4",
     "eslint": "^9.39.1",
@@ -47,6 +50,7 @@
     "postcss": "^8",
     "sharp": "^0.34.5",
     "tailwindcss": "^3.4.14",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.0.16"
   }
 }
