@@ -208,7 +208,7 @@ export function createBridgeInfo(
 /**
  * Draw a bridge tile (called during road rendering for bridge tiles)
  */
-export function drawBridgeTile(
+export function renderBridgeTile(
   ctx: CanvasRenderingContext2D,
   x: number, // Screen X
   y: number, // Screen Y
@@ -738,7 +738,7 @@ export function getBridgeDeckOffset(bridgeInfo: BridgeInfo): number {
  * Check if a tile is a bridge tile
  */
 export function isBridgeTile(tile: Tile): boolean {
-  return tile.building.type === 'road' && tile.building.bridgeInfo !== undefined;
+  return tile.building.type === 'road' && tile.building.bridgeType !== undefined;
 }
 
 /**
@@ -746,5 +746,19 @@ export function isBridgeTile(tile: Tile): boolean {
  */
 export function getBridgeRenderInfo(tile: Tile): BridgeInfo | null {
   if (!isBridgeTile(tile)) return null;
-  return tile.building.bridgeInfo || null;
+
+  const b = tile.building;
+  if (!b.bridgeType || b.bridgeSpan === undefined) return null;
+
+  const config = BRIDGE_TYPE_CONFIG[b.bridgeType];
+
+  return {
+    bridgeId: `bridge_${tile.x}_${tile.y}`,
+    bridgeType: b.bridgeType,
+    variant: (b.bridgeVariant as BridgeVariant) || 0,
+    span: b.bridgeSpan,
+    position: b.bridgeIndex || 0,
+    orientation: b.bridgeOrientation || 'ns',
+    height: config.height,
+  };
 }

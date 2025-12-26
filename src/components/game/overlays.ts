@@ -84,6 +84,12 @@ export const OVERLAY_CONFIG: Record<OverlayMode, OverlayConfig> = {
     activeColor: 'bg-yellow-500',
     hoverColor: 'hover:bg-yellow-600',
   },
+  ownership: {
+    label: 'Owners',
+    title: 'Property Ownership',
+    activeColor: 'bg-indigo-500',
+    hoverColor: 'hover:bg-indigo-600',
+  },
 };
 
 /** Map of building tools to their corresponding overlay mode */
@@ -146,7 +152,7 @@ export function getOverlayFillStyle(
 ): string {
   // Only show warning on tiles that have buildings needing coverage
   const needsCoverage = tileNeedsCoverage(tile);
-  
+
   switch (mode) {
     case 'power':
       // Red warning only on unpowered buildings
@@ -184,6 +190,18 @@ export function getOverlayFillStyle(
         ? 'rgba(245, 158, 11, 0.7)'  // Bright amber for existing subway
         : 'rgba(40, 30, 20, 0.4)';   // Dark brown tint for "underground" view
 
+    case 'ownership':
+      // Show ownership overlay
+      if (tile.building.ownerId) {
+        if (tile.building.forSale) {
+          return 'rgba(16, 185, 129, 0.6)'; // Emerald green for properties for sale
+        }
+        // We could generate a color from the ownerId hash, but for now use a fixed color
+        // In the future, we can map ownerIds to specific colors
+        return 'rgba(99, 102, 241, 0.6)'; // Indigo for owned tiles
+      }
+      return NO_OVERLAY;
+
     case 'none':
     default:
       return NO_OVERLAY;
@@ -200,7 +218,7 @@ export function getOverlayForTool(tool: string): OverlayMode {
 
 /** List of all overlay modes (for iteration) */
 export const OVERLAY_MODES: OverlayMode[] = [
-  'none', 'power', 'water', 'fire', 'police', 'health', 'education', 'subway'
+  'none', 'power', 'water', 'fire', 'police', 'health', 'education', 'subway', 'ownership'
 ];
 
 // ============================================================================
@@ -217,6 +235,7 @@ export const OVERLAY_TO_BUILDING_TYPES: Record<OverlayMode, string[]> = {
   health: ['hospital'],
   education: ['school', 'university'],
   subway: ['subway_station'],
+  ownership: [], // Applies to all buildings with owners
 };
 
 /** Overlay circle stroke colors (light/visible colors) */
@@ -229,6 +248,7 @@ export const OVERLAY_CIRCLE_COLORS: Record<OverlayMode, string> = {
   health: 'rgba(134, 239, 172, 0.8)',  // Light green
   education: 'rgba(196, 181, 253, 0.8)', // Light purple
   subway: 'rgba(253, 224, 71, 0.8)',   // Yellow
+  ownership: 'rgba(99, 102, 241, 0.8)', // Indigo
 };
 
 /** Building highlight glow colors */
@@ -241,6 +261,7 @@ export const OVERLAY_HIGHLIGHT_COLORS: Record<OverlayMode, string> = {
   health: 'rgba(34, 197, 94, 1)',      // Green
   education: 'rgba(168, 85, 247, 1)',  // Purple
   subway: 'rgba(234, 179, 8, 1)',      // Yellow
+  ownership: 'rgba(99, 102, 241, 1)',  // Indigo
 };
 
 /** Overlay circle fill colors (subtle, for area visibility) */
@@ -253,4 +274,5 @@ export const OVERLAY_CIRCLE_FILL_COLORS: Record<OverlayMode, string> = {
   health: 'rgba(134, 239, 172, 0.12)',
   education: 'rgba(196, 181, 253, 0.12)',
   subway: 'rgba(253, 224, 71, 0.12)',
+  ownership: 'rgba(99, 102, 241, 0.12)',
 };

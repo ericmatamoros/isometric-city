@@ -18,6 +18,9 @@ import {
   CheckIcon,
 } from '@/components/ui/Icons';
 import { copyShareUrl } from '@/lib/shareState';
+import { ConnectWallet } from '@/components/ConnectWallet';
+import { LeaderboardPanel } from './panels';
+import { Trophy } from 'lucide-react';
 
 // ============================================================================
 // TIME OF DAY ICON
@@ -31,7 +34,7 @@ export const TimeOfDayIcon = ({ hour }: TimeOfDayIconProps) => {
   const isNight = hour < 6 || hour >= 20;
   const isDawn = hour >= 6 && hour < 8;
   const isDusk = hour >= 18 && hour < 20;
-  
+
   if (isNight) {
     // Moon icon
     return (
@@ -67,10 +70,10 @@ interface StatBadgeProps {
 }
 
 export function StatBadge({ value, label, variant = 'default' }: StatBadgeProps) {
-  const colorClass = variant === 'success' ? 'text-green-500' : 
-                     variant === 'warning' ? 'text-amber-500' : 
-                     variant === 'destructive' ? 'text-red-500' : 'text-foreground';
-  
+  const colorClass = variant === 'success' ? 'text-green-500' :
+    variant === 'warning' ? 'text-amber-500' :
+      variant === 'destructive' ? 'text-red-500' : 'text-foreground';
+
   return (
     <div className="flex flex-col items-start min-w-[70px]">
       <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-0.5">{label}</div>
@@ -92,7 +95,7 @@ interface DemandIndicatorProps {
 export function DemandIndicator({ label, demand, color }: DemandIndicatorProps) {
   const height = Math.abs(demand) / 2;
   const isPositive = demand >= 0;
-  
+
   return (
     <div className="flex flex-col items-center gap-1">
       <span className={`text-[10px] font-bold ${color}`}>{label}</span>
@@ -138,7 +141,7 @@ export function MiniStat({ icon, label, value }: MiniStatProps) {
 export const StatsPanel = React.memo(function StatsPanel() {
   const { state } = useGame();
   const { stats } = state;
-  
+
   return (
     <div className="h-8 bg-secondary/50 border-b border-border flex items-center justify-center gap-8 text-xs">
       <MiniStat icon={<HappyIcon size={12} />} label="Happiness" value={stats.happiness} />
@@ -157,10 +160,11 @@ export const StatsPanel = React.memo(function StatsPanel() {
 export const TopBar = React.memo(function TopBar() {
   const { state, setSpeed, setTaxRate, isSaving, visualHour } = useGame();
   const { stats, year, month, day, speed, taxRate, cityName } = state;
-  
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const formattedDate = `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}-${year}`;
-  
+
   return (
     <div className="h-14 bg-card border-b border-border flex items-center justify-between px-4">
       <div className="flex items-center gap-6">
@@ -183,7 +187,7 @@ export const TopBar = React.memo(function TopBar() {
             <TimeOfDayIcon hour={visualHour} />
           </div>
         </div>
-        
+
         <div className="flex items-center gap-0 bg-secondary rounded-md p-0">
           {[0, 1, 2, 3].map(s => (
             <Button
@@ -194,49 +198,66 @@ export const TopBar = React.memo(function TopBar() {
               className="h-7 w-7 p-0 m-0"
               title={s === 0 ? 'Pause' : s === 1 ? 'Normal' : s === 2 ? 'Fast' : 'Very Fast'}
             >
-              {s === 0 ? <PauseIcon size={12} /> : 
-               s === 1 ? <PlayIcon size={12} /> : 
-               s === 2 ? (
-                 <div className="flex items-center -space-x-[5px]">
-                   <PlayIcon size={12} />
-                   <PlayIcon size={12} />
-                 </div>
-               ) :
-               <div className="flex items-center -space-x-[7px]">
-                 <PlayIcon size={12} />
-                 <PlayIcon size={12} />
-                 <PlayIcon size={12} />
-               </div>}
+              {s === 0 ? <PauseIcon size={12} /> :
+                s === 1 ? <PlayIcon size={12} /> :
+                  s === 2 ? (
+                    <div className="flex items-center -space-x-[5px]">
+                      <PlayIcon size={12} />
+                      <PlayIcon size={12} />
+                    </div>
+                  ) :
+                    <div className="flex items-center -space-x-[7px]">
+                      <PlayIcon size={12} />
+                      <PlayIcon size={12} />
+                      <PlayIcon size={12} />
+                    </div>}
             </Button>
           ))}
         </div>
       </div>
-      
+
       <div className="flex items-center gap-8">
         <StatBadge value={stats.population.toLocaleString()} label="Population" />
         <StatBadge value={stats.jobs.toLocaleString()} label="Jobs" />
-        <StatBadge 
-          value={`$${stats.money.toLocaleString()}`} 
-          label="Funds"
+        <StatBadge
+          value={`$${stats.money.toLocaleString()}`}
+          label="City Funds"
           variant={stats.money < 0 ? 'destructive' : stats.money < 1000 ? 'warning' : 'success'}
         />
+        {state.playerBalance !== undefined && (
+          <StatBadge
+            value={`$${state.playerBalance.toLocaleString()}`}
+            label="My Wallet"
+            variant="success"
+          />
+        )}
+        <Button
+          variant={showLeaderboard ? "default" : "outline"}
+          size="sm"
+          className="h-8 gap-2"
+          onClick={() => setShowLeaderboard(!showLeaderboard)}
+        >
+          <Trophy className="w-4 h-4" />
+          <span className="hidden sm:inline">Leaderboard</span>
+        </Button>
         <Separator orientation="vertical" className="h-8" />
-        <StatBadge 
-          value={`$${(stats.income - stats.expenses).toLocaleString()}`} 
+        <Separator orientation="vertical" className="h-8" />
+        <StatBadge
+          value={`$${(stats.income - stats.expenses).toLocaleString()}`}
           label="Monthly"
           variant={stats.income - stats.expenses >= 0 ? 'success' : 'destructive'}
         />
       </div>
-      
+
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           <DemandIndicator label="R" demand={stats.demand.residential} color="text-green-500" />
           <DemandIndicator label="C" demand={stats.demand.commercial} color="text-blue-500" />
           <DemandIndicator label="I" demand={stats.demand.industrial} color="text-amber-500" />
         </div>
-        
+
         <Separator orientation="vertical" className="h-8" />
-        
+
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground text-xs">Tax</span>
           <Slider
@@ -249,7 +270,14 @@ export const TopBar = React.memo(function TopBar() {
           />
           <span className="text-foreground text-xs font-mono tabular-nums w-8">{taxRate}%</span>
         </div>
+
+        <Separator orientation="vertical" className="h-8" />
+
+        <ConnectWallet />
       </div>
+      {showLeaderboard && (
+        <LeaderboardPanel onClose={() => setShowLeaderboard(false)} />
+      )}
     </div>
   );
 });

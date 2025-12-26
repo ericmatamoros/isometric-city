@@ -2,10 +2,14 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useEffect, useState, useRef } from 'react';
+import { SocketContext } from './SocketContext';
+import { WalletContext } from './WalletContext';
 import {
   Budget,
   BuildingType,
+  ActivityLogEntry,
   GameState,
+  LeaderboardEntry,
   SavedCityMeta,
   Tool,
   TOOL_INFO,
@@ -90,6 +94,7 @@ type GameContextValue = {
   loadSavedCity: (cityId: string) => boolean;
   deleteSavedCity: (cityId: string) => void;
   renameSavedCity: (cityId: string, newName: string) => void;
+  addFloatingText: (x: number, y: number, text: string, color: string) => void;
 };
 
 const GameContext = createContext<GameContextValue | null>(null);
@@ -165,14 +170,14 @@ function loadGameState(): GameState | null {
     if (saved) {
       const parsed = JSON.parse(saved);
       // Validate it has essential properties
-      if (parsed && 
-          parsed.grid && 
-          Array.isArray(parsed.grid) &&
-          parsed.gridSize && 
-          typeof parsed.gridSize === 'number' &&
-          parsed.stats &&
-          parsed.stats.money !== undefined &&
-          parsed.stats.population !== undefined) {
+      if (parsed &&
+        parsed.grid &&
+        Array.isArray(parsed.grid) &&
+        parsed.gridSize &&
+        typeof parsed.gridSize === 'number' &&
+        parsed.stats &&
+        parsed.stats.money !== undefined &&
+        parsed.stats.population !== undefined) {
         // Migrate park_medium to park_large
         if (parsed.grid) {
           for (let y = 0; y < parsed.grid.length; y++) {
@@ -247,8 +252,8 @@ function loadGameState(): GameState | null {
               // This ensures saved games continue to work without breaking changes
               if (parsed.grid[y][x]?.building) {
                 const buildingType = parsed.grid[y][x].building.type;
-                if (SERVICE_BUILDING_TYPES.has(buildingType) && 
-                    parsed.grid[y][x].building.grandfatheredRoadAccess === undefined) {
+                if (SERVICE_BUILDING_TYPES.has(buildingType) &&
+                  parsed.grid[y][x].building.grandfatheredRoadAccess === undefined) {
                   parsed.grid[y][x].building.grandfatheredRoadAccess = true;
                 }
               }
@@ -289,14 +294,14 @@ function saveGameState(state: GameState): void {
       console.error('Invalid game state, cannot save', { state, hasGrid: !!state?.grid, hasGridSize: !!state?.gridSize, hasStats: !!state?.stats });
       return;
     }
-    
+
     const serialized = JSON.stringify(state);
-    
+
     // Check if data is too large (localStorage has ~5-10MB limit)
     if (serialized.length > 5 * 1024 * 1024) {
       return;
     }
-    
+
     localStorage.setItem(STORAGE_KEY, serialized);
   } catch (e) {
     // Handle quota exceeded errors
@@ -519,22 +524,22 @@ function deleteCityState(cityId: string): void {
 export function GameProvider({ children }: { children: React.ReactNode }) {
   // Start with a default state, we'll load from localStorage after mount
   const [state, setState] = useState<GameState>(() => createInitialGameState(DEFAULT_GRID_SIZE, 'IsoCity'));
-  
+
   const [hasExistingGame, setHasExistingGame] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextSaveRef = useRef(false);
   const hasLoadedRef = useRef(false);
-  
+
   // Sprite pack state
   const [currentSpritePack, setCurrentSpritePack] = useState<SpritePack>(() => getSpritePack(DEFAULT_SPRITE_PACK_ID));
-  
+
   // Day/night mode state
   const [dayNightMode, setDayNightModeState] = useState<DayNightMode>('auto');
-  
+
   // Saved cities state for multi-city save system
   const [savedCities, setSavedCities] = useState<SavedCityMeta[]>([]);
-  
+
   // Load game state and sprite pack from localStorage on mount (client-side only)
   useEffect(() => {
     // Load sprite pack preference
@@ -542,15 +547,15 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     const pack = getSpritePack(savedPackId);
     setCurrentSpritePack(pack);
     setActiveSpritePack(pack);
-    
+
     // Load day/night mode preference
     const savedDayNightMode = loadDayNightMode();
     setDayNightModeState(savedDayNightMode);
-    
+
     // Load saved cities index
     const cities = loadSavedCitiesIndex();
     setSavedCities(cities);
-    
+
     // Load game state
     const saved = loadGameState();
     if (saved) {
@@ -563,28 +568,28 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     // Mark as loaded immediately - the skipNextSaveRef will handle skipping the first save
     hasLoadedRef.current = true;
   }, []);
-  
+
   // Track the state that needs to be saved
   const stateToSaveRef = useRef<GameState | null>(null);
   const lastSaveTimeRef = useRef<number>(0);
   const saveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  
+
   // Update the state to save whenever state changes
   useEffect(() => {
     if (!hasLoadedRef.current) {
       return;
     }
-    
+
     if (skipNextSaveRef.current) {
       skipNextSaveRef.current = false;
       lastSaveTimeRef.current = Date.now();
       return;
     }
-    
+
     // Store current state for saving (deep copy)
     stateToSaveRef.current = JSON.parse(JSON.stringify(state));
   }, [state]);
-  
+
   // Separate effect that actually performs saves on an interval
   useEffect(() => {
     // Wait for initial load
@@ -592,33 +597,33 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       if (!hasLoadedRef.current) {
         return;
       }
-      
+
       // Clear the check interval
       clearInterval(checkLoaded);
-      
+
       // Clear any existing save interval
       if (saveIntervalRef.current) {
         clearInterval(saveIntervalRef.current);
       }
-      
+
       // Set up interval to save every 3 seconds if there's pending state
       saveIntervalRef.current = setInterval(() => {
         // Don't save if we just loaded
         if (skipNextSaveRef.current) {
           return;
         }
-        
+
         // Don't save too frequently
         const timeSinceLastSave = Date.now() - lastSaveTimeRef.current;
         if (timeSinceLastSave < 2000) {
           return;
         }
-        
+
         // Don't save if there's no state to save
         if (!stateToSaveRef.current) {
           return;
         }
-        
+
         // Perform the save
         setIsSaving(true);
         try {
@@ -630,7 +635,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         }
       }, 3000); // Check every 3 seconds
     }, 100);
-    
+
     return () => {
       clearInterval(checkLoaded);
       if (saveIntervalRef.current) {
@@ -646,17 +651,17 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     if (state.speed > 0) {
       // Check if running on mobile for performance optimization
       const isMobileDevice = typeof window !== 'undefined' && (
-        window.innerWidth < 768 || 
+        window.innerWidth < 768 ||
         /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
       );
-      
+
       // Slower tick intervals on mobile to reduce CPU load
       // Desktop: 500ms, 220ms, 50ms for speeds 1, 2, 3
       // Mobile: 750ms, 400ms, 150ms for speeds 1, 2, 3 (50% slower)
       const interval = isMobileDevice
         ? (state.speed === 1 ? 750 : state.speed === 2 ? 400 : 150)
         : (state.speed === 1 ? 500 : state.speed === 2 ? 220 : 50);
-        
+
       timer = setInterval(() => {
         setState((prev) => simulateTick(prev));
       }, interval);
@@ -702,6 +707,199 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  const addFloatingText = useCallback((x: number, y: number, text: string, color: string) => {
+    setState(prev => ({
+      ...prev,
+      floatingTexts: [
+        ...(prev.floatingTexts || []),
+        {
+          id: Math.random().toString(36).substring(7),
+          x,
+          y,
+          text,
+          color,
+          opacity: 1,
+          life: 1
+        }
+      ]
+    }));
+  }, []);
+
+  // Inject Socket and Wallet contexts
+  const { socket, isConnected: isSocketConnected } = useContext(SocketContext) || { socket: null, isConnected: false };
+  const { address: walletAddress } = useContext(WalletContext) || { address: null };
+
+  // Listen for socket events
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on('tile_updated', (data: { x: number; y: number; type: string; ownerAddress: string }) => {
+      setState((prev) => {
+        // Update the grid with the new building
+        // We need to map the string type back to BuildingType if needed, or just use it
+        // Ideally we should use the placeBuilding function but avoiding side effects
+        // For now, let's just force the update on the grid
+        const newGrid = [...prev.grid];
+        const row = [...newGrid[data.y]];
+
+        // Create a basic building of that type
+        // Note: This is a simplification. Ideally we'd use placeBuilding logic
+        // but we need to avoid the cost check and just apply the change
+        // We also need to handle 'owner' metadata which we haven't added to Building yet
+
+        // For now, just log it
+        console.log('Remote tile update:', data);
+
+        // TODO: Implement proper remote placement
+        return prev;
+      });
+    });
+
+    socket.on('tile_for_sale', (data: { x: number; y: number; price: number; ownerAddress: string }) => {
+      setState((prev) => {
+        const newGrid = [...prev.grid];
+        newGrid[data.y] = [...prev.grid[data.y]];
+        newGrid[data.y][data.x] = {
+          ...newGrid[data.y][data.x],
+          building: {
+            ...newGrid[data.y][data.x].building,
+            forSale: true,
+            price: data.price
+          }
+        };
+        return { ...prev, grid: newGrid };
+      });
+      addNotification('Market', `Property listed at ${data.x},${data.y} for $${data.price}`, 'info');
+    });
+
+    socket.on('tile_sold', (data: { x: number; y: number; newOwnerAddress: string; price: number }) => {
+      setState((prev) => {
+        const newGrid = [...prev.grid];
+        newGrid[data.y] = [...prev.grid[data.y]];
+        newGrid[data.y][data.x] = {
+          ...newGrid[data.y][data.x],
+          building: {
+            ...newGrid[data.y][data.x].building,
+            ownerId: data.newOwnerAddress,
+            forSale: false,
+            price: undefined
+          }
+        };
+        return { ...prev, grid: newGrid };
+      });
+      addNotification('Market', `Property at ${data.x},${data.y} sold for $${data.price}`, 'success');
+    });
+
+    socket.on('transaction_complete', (data: {
+      buyerAddress: string;
+      buyerBalance: number;
+      sellerAddress: string;
+      sellerBalance: number;
+      x: number;
+      y: number;
+      price: number;
+    }) => {
+      if (walletAddress === data.buyerAddress) {
+        setState(prev => ({ ...prev, playerBalance: data.buyerBalance }));
+        addNotification('Wallet', `Purchase successful. New balance: $${data.buyerBalance}`, 'success');
+        addFloatingText(data.x, data.y, `-$${data.price}`, '#ef4444');
+      }
+      if (walletAddress === data.sellerAddress) {
+        setState(prev => ({ ...prev, playerBalance: data.sellerBalance }));
+        addNotification('Wallet', `Sale successful. New balance: $${data.sellerBalance}`, 'success');
+        addFloatingText(data.x, data.y, `+$${data.price}`, '#10b981');
+      }
+    });
+
+    socket.on('activity', (entry: Omit<ActivityLogEntry, 'id' | 'timestamp'>) => {
+      const newEntry: ActivityLogEntry = {
+        ...entry,
+        id: Math.random().toString(36).substring(7),
+        timestamp: Date.now()
+      };
+      setState(prev => ({
+        ...prev,
+        activityLog: [newEntry, ...(prev.activityLog || [])].slice(0, 50)
+      }));
+    });
+
+    socket.on('balance_update', (balance: number) => {
+      setState(prev => ({ ...prev, playerBalance: balance }));
+    });
+
+    socket.on('rent_collected', (data: { x: number; y: number; amount: number }) => {
+      addNotification('Income', `Collected $${data.amount} rent from property at ${data.x},${data.y}`, 'success');
+      addFloatingText(data.x, data.y, `+$${data.amount}`, '#10b981');
+    });
+
+    socket.on('leaderboard_update', (leaderboard: LeaderboardEntry[]) => {
+      const updatedLeaderboard = leaderboard.map(entry => ({
+        ...entry,
+        isCurrentUser: entry.walletAddress === walletAddress
+      }));
+      setState(prev => ({ ...prev, leaderboard: updatedLeaderboard }));
+    });
+
+    socket.on('error', (err: { message: string }) => {
+      addNotification('Error', err.message, 'alert');
+    });
+
+    return () => {
+      socket.off('tile_updated');
+      socket.off('tile_for_sale');
+      socket.off('tile_sold');
+      socket.off('transaction_complete');
+      socket.off('transaction_complete');
+      socket.off('balance_update');
+      socket.off('rent_collected');
+      socket.off('leaderboard_update');
+      socket.off('rent_collected');
+      socket.off('leaderboard_update');
+      socket.off('activity');
+      socket.off('error');
+    };
+  }, [socket, walletAddress]);
+
+  // Periodic rent collection check (every 10 seconds)
+  useEffect(() => {
+    if (!socket || !walletAddress || !state.grid) return;
+
+    const rentInterval = setInterval(() => {
+      // Find owned properties that might be eligible for rent
+      // This is a naive check; the server enforces the real cooldown
+      // We just try to collect from a few random owned tiles to avoid spamming the server all at once
+
+      const ownedTiles: { x: number, y: number }[] = [];
+      state.grid.forEach(row => {
+        row.forEach(tile => {
+          if (tile.building.ownerId === walletAddress &&
+            tile.building.type !== 'road' &&
+            tile.building.type !== 'grass' &&
+            tile.building.type !== 'water') {
+            ownedTiles.push({ x: tile.x, y: tile.y });
+          }
+        });
+      });
+
+      if (ownedTiles.length === 0) return;
+
+      // Try to collect from up to 3 properties per cycle
+      const tilesToCollect = ownedTiles.sort(() => 0.5 - Math.random()).slice(0, 3);
+
+      tilesToCollect.forEach(tile => {
+        socket.emit('collect_rent', {
+          worldId: 'default-world',
+          x: tile.x,
+          y: tile.y,
+          ownerAddress: walletAddress
+        });
+      });
+
+    }, 10000); // Check every 10 seconds
+
+    return () => clearInterval(rentInterval);
+  }, [socket, walletAddress, state.grid]);
+
   const placeAtTile = useCallback((x: number, y: number) => {
     setState((prev) => {
       const tool = prev.selectedTool;
@@ -712,6 +910,27 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       const tile = prev.grid[y]?.[x];
 
       if (!tile) return prev;
+
+      // Multiplayer Logic: If connected and placing a building, emit event
+      if (isSocketConnected && walletAddress && cost > 0) {
+        // We optimistically update OR wait for server?
+        // For a snappy feel, we should optimistically update but maybe show a "pending" state
+        // For this MVP, let's emit and wait for the echo back (or just emit and assume success for local, but revert if error)
+
+        // Actually, let's emit the event and let the server handle the transaction
+        // But we also want to run the local simulation logic to update the grid immediately
+
+        socket?.emit('place_building', {
+          worldId: 'default-world',
+          x,
+          y,
+          type: toolBuildingMap[tool] || 'grass', // Map tool to building type
+          ownerAddress: walletAddress,
+          cost
+        });
+      }
+
+      // ... existing local logic ...
       if (cost > 0 && prev.stats.money < cost) return prev;
 
       // Prevent wasted spend if nothing would change
@@ -724,47 +943,47 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
       if (zone && tile.zone === zone) return prev;
       if (building && tile.building.type === building) return prev;
-      
+
       // Handle subway tool separately (underground placement)
       if (tool === 'subway') {
         // Can't place subway under water
         if (tile.building.type === 'water') return prev;
         // Already has subway
         if (tile.hasSubway) return prev;
-        
+
         const nextState = placeSubway(prev, x, y);
         if (nextState === prev) return prev;
-        
+
         return {
           ...nextState,
           stats: { ...nextState.stats, money: nextState.stats.money - cost },
         };
       }
-      
+
       // Handle water terraform tool separately
       if (tool === 'zone_water') {
         // Already water - do nothing
         if (tile.building.type === 'water') return prev;
         // Don't allow terraforming bridges - would break them
         if (tile.building.type === 'bridge') return prev;
-        
+
         const nextState = placeWaterTerraform(prev, x, y);
         if (nextState === prev) return prev;
-        
+
         return {
           ...nextState,
           stats: { ...nextState.stats, money: nextState.stats.money - cost },
         };
       }
-      
+
       // Handle land terraform tool separately
       if (tool === 'zone_land') {
         // Only works on water
         if (tile.building.type !== 'water') return prev;
-        
+
         const nextState = placeLandTerraform(prev, x, y);
         if (nextState === prev) return prev;
-        
+
         return {
           ...nextState,
           stats: { ...nextState.stats, money: nextState.stats.money - cost },
@@ -789,12 +1008,24 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         nextState = {
           ...nextState,
           stats: { ...nextState.stats, money: nextState.stats.money - cost },
+          floatingTexts: [
+            ...(nextState.floatingTexts || []),
+            {
+              id: Math.random().toString(36).substring(7),
+              x,
+              y,
+              text: `-$${cost}`,
+              color: '#ef4444',
+              opacity: 1,
+              life: 1
+            }
+          ]
         };
       }
 
       return nextState;
     });
-  }, []);
+  }, [isSocketConnected, walletAddress, socket]);
 
   // Called after a road/rail drag operation to create bridges for water crossings
   const finishTrackDrag = useCallback((pathTiles: { x: number; y: number }[], trackType: 'road' | 'rail') => {
@@ -869,16 +1100,16 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const checkAndDiscoverCities = useCallback((onDiscover?: (city: { id: string; direction: 'north' | 'south' | 'east' | 'west'; name: string }) => void): void => {
     setState((prev) => {
       const newlyDiscovered = checkForDiscoverableCities(prev.grid, prev.gridSize, prev.adjacentCities);
-      
+
       if (newlyDiscovered.length === 0) return prev;
-      
+
       // Discover the first city found
       const cityToDiscover = newlyDiscovered[0];
-      
+
       const updatedCities = prev.adjacentCities.map(c =>
         c.id === cityToDiscover.id ? { ...c, discovered: true } : c
       );
-      
+
       // Call the callback after state update is scheduled
       if (onDiscover) {
         setTimeout(() => {
@@ -889,7 +1120,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           });
         }, 0);
       }
-      
+
       return {
         ...prev,
         adjacentCities: updatedCities,
@@ -915,9 +1146,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   // Compute the visual hour based on the day/night mode override
   // This doesn't affect time progression, just the rendering
-  const visualHour = dayNightMode === 'auto' 
-    ? state.hour 
-    : dayNightMode === 'day' 
+  const visualHour = dayNightMode === 'auto'
+    ? state.hour
+    : dayNightMode === 'day'
       ? 12  // Noon - full daylight
       : 22; // Night time
 
@@ -935,14 +1166,14 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     try {
       const parsed = JSON.parse(stateString);
       // Validate it has essential properties
-      if (parsed && 
-          parsed.grid && 
-          Array.isArray(parsed.grid) &&
-          parsed.gridSize && 
-          typeof parsed.gridSize === 'number' &&
-          parsed.stats &&
-          parsed.stats.money !== undefined &&
-          parsed.stats.population !== undefined) {
+      if (parsed &&
+        parsed.grid &&
+        Array.isArray(parsed.grid) &&
+        parsed.gridSize &&
+        typeof parsed.gridSize === 'number' &&
+        parsed.stats &&
+        parsed.stats.money !== undefined &&
+        parsed.stats.population !== undefined) {
         // Ensure new fields exist for backward compatibility
         if (!parsed.adjacentCities) {
           parsed.adjacentCities = [];
@@ -1096,16 +1327,16 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       gridSize: state.gridSize,
       savedAt: Date.now(),
     };
-    
+
     // Save the city state
     saveCityState(state.id, state);
-    
+
     // Update the index
     setSavedCities((prev) => {
       // Check if this city already exists in the list
       const existingIndex = prev.findIndex((c) => c.id === state.id);
       let newCities: SavedCityMeta[];
-      
+
       if (existingIndex >= 0) {
         // Update existing entry
         newCities = [...prev];
@@ -1114,13 +1345,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         // Add new entry
         newCities = [...prev, cityMeta];
       }
-      
+
       // Sort by savedAt descending (most recent first)
       newCities.sort((a, b) => b.savedAt - a.savedAt);
-      
+
       // Persist to localStorage
       saveSavedCitiesIndex(newCities);
-      
+
       return newCities;
     });
   }, [state]);
@@ -1129,12 +1360,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const loadSavedCity = useCallback((cityId: string): boolean => {
     const cityState = loadCityState(cityId);
     if (!cityState) return false;
-    
+
     // Ensure the loaded state has an ID
     if (!cityState.id) {
       cityState.id = cityId;
     }
-    
+
     // Perform migrations for backward compatibility
     if (!cityState.adjacentCities) {
       cityState.adjacentCities = [];
@@ -1184,16 +1415,16 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         }
       }
     }
-    
+
     skipNextSaveRef.current = true;
     setState((prev) => ({
       ...cityState,
       gameVersion: (prev.gameVersion ?? 0) + 1,
     }));
-    
+
     // Also update the current game in local storage
     saveGameState(cityState);
-    
+
     return true;
   }, []);
 
@@ -1201,7 +1432,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const deleteSavedCity = useCallback((cityId: string) => {
     // Delete the city state
     deleteCityState(cityId);
-    
+
     // Update the index
     setSavedCities((prev) => {
       const newCities = prev.filter((c) => c.id !== cityId);
@@ -1218,7 +1449,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       cityState.cityName = newName;
       saveCityState(cityId, cityState);
     }
-    
+
     // Update the index
     setSavedCities((prev) => {
       const newCities = prev.map((c) =>
@@ -1227,7 +1458,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       saveSavedCitiesIndex(newCities);
       return newCities;
     });
-    
+
     // If the current game is the one being renamed, update its state too
     if (state.id === cityId) {
       setState((prev) => ({ ...prev, cityName: newName }));
@@ -1274,6 +1505,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     loadSavedCity,
     deleteSavedCity,
     renameSavedCity,
+    addFloatingText,
   };
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

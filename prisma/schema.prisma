@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  walletAddress String    @unique
+  username      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Economy
+  balance       Float     @default(10000) // Starting money
+  
+  // Relations
+  ownedTiles    Tile[]
+  transactions  Transaction[]
+}
+
+model World {
+  id        String   @id @default(uuid())
+  name      String
+  width     Int
+  height    Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  tiles     Tile[]
+}
+
+model Tile {
+  id        String   @id @default(uuid())
+  x         Int
+  y         Int
+  type      String   // 'grass', 'road', 'commercial', etc.
+  
+  // Relations
+  worldId   String
+  world     World    @relation(fields: [worldId], references: [id])
+  
+  ownerId   String?
+  owner     User?    @relation(fields: [ownerId], references: [id])
+  
+  // Economy
+  forSale   Boolean  @default(false)
+  price     Float?
+  lastRentCollected DateTime?   // If set, it's for sale
+  rentPrice Float?   // Cost to use/rent
+  
+  @@unique([worldId, x, y])
+}
+
+model Transaction {
+  id        String   @id @default(uuid())
+  amount    Float
+  type      String   // 'purchase', 'rent', 'transfer'
+  createdAt DateTime @default(now())
+  
+  // Relations
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+}

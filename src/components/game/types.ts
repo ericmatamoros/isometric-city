@@ -469,7 +469,7 @@ export type WorldRenderState = {
 };
 
 // Overlay modes for visualization
-export type OverlayMode = 'none' | 'power' | 'water' | 'fire' | 'police' | 'health' | 'education' | 'subway';
+export type OverlayMode = 'none' | 'power' | 'water' | 'fire' | 'police' | 'health' | 'education' | 'subway' | 'ownership';
 
 // ============================================================================
 // Train Types

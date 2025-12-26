@@ -27,6 +27,7 @@ import {
 import { MiniMap } from '@/components/game/MiniMap';
 import { TopBar, StatsPanel } from '@/components/game/TopBar';
 import { CanvasIsometricGrid } from '@/components/game/CanvasIsometricGrid';
+import { ActivityLog } from '@/components/game/ActivityLog';
 
 // Cargo type names for notifications
 const CARGO_TYPE_NAMES = ['containers', 'bulk materials', 'oil'];
@@ -40,7 +41,7 @@ export default function Game({ onExit }: { onExit?: () => void }) {
   const isInitialMount = useRef(true);
   const { isMobileDevice, isSmallScreen } = useMobile();
   const isMobile = isMobileDevice || isSmallScreen;
-  
+
   // Cheat code system
   const {
     triggeredCheat,
@@ -52,12 +53,12 @@ export default function Game({ onExit }: { onExit?: () => void }) {
   const previousSelectedToolRef = useRef<Tool | null>(null);
   const hasCapturedInitialTool = useRef(false);
   const currentSelectedToolRef = useRef<Tool>(state.selectedTool);
-  
+
   // Keep currentSelectedToolRef in sync with state
   useEffect(() => {
     currentSelectedToolRef.current = state.selectedTool;
   }, [state.selectedTool]);
-  
+
   // Track the initial selectedTool after localStorage loads (with a small delay to allow state to load)
   useEffect(() => {
     if (!hasCapturedInitialTool.current) {
@@ -70,14 +71,14 @@ export default function Game({ onExit }: { onExit?: () => void }) {
       return () => clearTimeout(timeoutId);
     }
   }, []); // Only run once on mount
-  
+
   // Auto-set overlay when selecting utility tools (but not on initial page load)
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
       return;
     }
-    
+
     // Select tool always resets overlay to none (user is explicitly switching to select)
     if (state.selectedTool === 'select') {
       setTimeout(() => {
@@ -86,7 +87,7 @@ export default function Game({ onExit }: { onExit?: () => void }) {
       previousSelectedToolRef.current = state.selectedTool;
       return;
     }
-    
+
     // Subway tool sets overlay when actively selected (not on page load)
     if (state.selectedTool === 'subway' || state.selectedTool === 'subway_station') {
       setTimeout(() => {
@@ -95,31 +96,31 @@ export default function Game({ onExit }: { onExit?: () => void }) {
       previousSelectedToolRef.current = state.selectedTool;
       return;
     }
-    
+
     // Don't auto-set overlay until we've captured the initial tool
     if (!hasCapturedInitialTool.current) {
       return;
     }
-    
+
     // Don't auto-set overlay if this matches the initial tool from localStorage
-    if (initialSelectedToolRef.current !== null && 
-        initialSelectedToolRef.current === state.selectedTool) {
+    if (initialSelectedToolRef.current !== null &&
+      initialSelectedToolRef.current === state.selectedTool) {
       return;
     }
-    
+
     // Don't auto-set overlay if tool hasn't changed
     if (previousSelectedToolRef.current === state.selectedTool) {
       return;
     }
-    
+
     // Update previous tool reference
     previousSelectedToolRef.current = state.selectedTool;
-    
+
     setTimeout(() => {
       setOverlayMode(getOverlayForTool(state.selectedTool));
     }, 0);
   }, [state.selectedTool]);
-  
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't trigger shortcuts when typing in input fields
@@ -148,7 +149,7 @@ export default function Game({ onExit }: { onExit?: () => void }) {
         setSpeed(state.speed === 0 ? 1 : 0);
       }
     };
-    
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [state.activePanel, state.selectedTool, state.speed, selectedTile, setActivePanel, setTool, setSpeed, overlayMode]);
@@ -184,15 +185,15 @@ export default function Game({ onExit }: { onExit?: () => void }) {
         break;
     }
   }, [triggeredCheat, addMoney, addNotification, clearTriggeredCheat]);
-  
+
   // Track barge deliveries to show occasional notifications
   const bargeDeliveryCountRef = useRef(0);
-  
+
   // Handle barge cargo delivery - adds money to the city treasury
   const handleBargeDelivery = useCallback((cargoValue: number, cargoType: number) => {
     addMoney(cargoValue);
     bargeDeliveryCountRef.current++;
-    
+
     // Show a notification every 5 deliveries to avoid spam
     if (bargeDeliveryCountRef.current % 5 === 1) {
       const cargoName = CARGO_TYPE_NAMES[cargoType] || 'cargo';
@@ -210,37 +211,37 @@ export default function Game({ onExit }: { onExit?: () => void }) {
       <TooltipProvider>
         <div className="w-full h-full overflow-hidden bg-background flex flex-col">
           {/* Mobile Top Bar */}
-          <MobileTopBar 
+          <MobileTopBar
             selectedTile={selectedTile && state.selectedTool === 'select' ? state.grid[selectedTile.y][selectedTile.x] : null}
             services={state.services}
             onCloseTile={() => setSelectedTile(null)}
             onExit={onExit}
           />
-          
+
           {/* Main canvas area - fills remaining space, with padding for top/bottom bars */}
           <div className="flex-1 relative overflow-hidden" style={{ paddingTop: '72px', paddingBottom: '76px' }}>
-            <CanvasIsometricGrid 
-              overlayMode={overlayMode} 
-              selectedTile={selectedTile} 
+            <CanvasIsometricGrid
+              overlayMode={overlayMode}
+              selectedTile={selectedTile}
               setSelectedTile={setSelectedTile}
               isMobile={true}
               onBargeDelivery={handleBargeDelivery}
             />
           </div>
-          
+
           {/* Mobile Bottom Toolbar */}
-          <MobileToolbar 
+          <MobileToolbar
             onOpenPanel={(panel) => setActivePanel(panel)}
             overlayMode={overlayMode}
             setOverlayMode={setOverlayMode}
           />
-          
+
           {/* Panels - render as fullscreen modals on mobile */}
           {state.activePanel === 'budget' && <BudgetPanel />}
           {state.activePanel === 'statistics' && <StatisticsPanel />}
           {state.activePanel === 'advisors' && <AdvisorsPanel />}
           {state.activePanel === 'settings' && <SettingsPanel />}
-          
+
           <VinnieDialog open={showVinnieDialog} onOpenChange={setShowVinnieDialog} />
         </div>
       </TooltipProvider>
@@ -252,14 +253,14 @@ export default function Game({ onExit }: { onExit?: () => void }) {
     <TooltipProvider>
       <div className="w-full h-full min-h-[720px] overflow-hidden bg-background flex">
         <Sidebar onExit={onExit} />
-        
+
         <div className="flex-1 flex flex-col">
           <TopBar />
           <StatsPanel />
           <div className="flex-1 relative overflow-visible">
-            <CanvasIsometricGrid 
-              overlayMode={overlayMode} 
-              selectedTile={selectedTile} 
+            <CanvasIsometricGrid
+              overlayMode={overlayMode}
+              selectedTile={selectedTile}
               setSelectedTile={setSelectedTile}
               navigationTarget={navigationTarget}
               onNavigationComplete={() => setNavigationTarget(null)}
@@ -268,14 +269,15 @@ export default function Game({ onExit }: { onExit?: () => void }) {
             />
             <OverlayModeToggle overlayMode={overlayMode} setOverlayMode={setOverlayMode} />
             <MiniMap onNavigate={(x, y) => setNavigationTarget({ x, y })} viewport={viewport} />
+            <ActivityLog />
           </div>
         </div>
-        
+
         {state.activePanel === 'budget' && <BudgetPanel />}
         {state.activePanel === 'statistics' && <StatisticsPanel />}
         {state.activePanel === 'advisors' && <AdvisorsPanel />}
         {state.activePanel === 'settings' && <SettingsPanel />}
-        
+
         <VinnieDialog open={showVinnieDialog} onOpenChange={setShowVinnieDialog} />
         <CommandMenu />
       </div>

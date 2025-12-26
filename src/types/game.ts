@@ -74,7 +74,11 @@ export type BuildingType =
   | 'pond_park'
   | 'park_gate'
   | 'mountain_lodge'
-  | 'mountain_trailhead';
+  | 'mountain_trailhead'
+  // Multiplayer buildings
+  | 'global_market'
+  | 'central_bank'
+  | 'trade_embassy';
 
 export type ZoneType = 'none' | 'residential' | 'commercial' | 'industrial';
 
@@ -136,7 +140,11 @@ export type Tool =
   | 'pond_park'
   | 'park_gate'
   | 'mountain_lodge'
-  | 'mountain_trailhead';
+  | 'mountain_trailhead'
+  // Multiplayer buildings
+  | 'global_market'
+  | 'central_bank'
+  | 'trade_embassy';
 
 export interface ToolInfo {
   name: string;
@@ -204,6 +212,10 @@ export const TOOL_INFO: Record<Tool, ToolInfo> = {
   park_gate: { name: 'Park Gate', cost: 150, description: 'Decorative park entrance', size: 1 },
   mountain_lodge: { name: 'Mountain Lodge', cost: 1500, description: 'Nature retreat lodge (2x2)', size: 2 },
   mountain_trailhead: { name: 'Trailhead', cost: 400, description: 'Hiking trail entrance (3x3)', size: 3 },
+  // Multiplayer buildings
+  global_market: { name: 'Global Market', cost: 50000, description: 'Access the global marketplace (2x2)', size: 2 },
+  central_bank: { name: 'Central Bank', cost: 75000, description: 'Manage city finances and loans (2x2)', size: 2 },
+  trade_embassy: { name: 'Trade Embassy', cost: 100000, description: 'Hub for inter-player trade (2x2)', size: 2 },
 };
 
 // Bridge types based on span width
@@ -231,6 +243,9 @@ export interface BridgeInfo {
   height: number;             // Bridge deck height above water (for rendering)
 }
 
+export type BridgeOrientation = 'ns' | 'ew';
+export type BridgeTrackType = 'road' | 'rail';
+
 export interface Building {
   type: BuildingType;
   level: number;
@@ -254,6 +269,10 @@ export interface Building {
   bridgeIndex?: number; // Index of this tile within the bridge (0-based)
   bridgeSpan?: number; // Total number of tiles in this bridge
   bridgeTrackType?: BridgeTrackType; // What the bridge carries: 'road' or 'rail'
+  ownerId?: string; // Wallet address of the player who owns this building
+  forSale?: boolean; // Is this property for sale?
+  price?: number; // Sale price
+  lastRentCollected?: string; // ISO timestamp of last rent collection
 }
 
 // City definition for multi-city maps
@@ -381,6 +400,33 @@ export interface WaterBody {
   centerY: number;
 }
 
+export interface ActivityLogEntry {
+  id: string;
+  timestamp: number;
+  type: 'purchase' | 'sale' | 'construction' | 'rent' | 'system';
+  message: string;
+  walletAddress?: string;
+}
+
+export interface FloatingText {
+  id: string;
+  x: number; // Grid X
+  y: number; // Grid Y
+  text: string;
+  color: string;
+  opacity: number;
+  life: number; // 0 to 1
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  walletAddress: string;
+  balance: number;
+  propertyValue: number;
+  totalWealth: number;
+  isCurrentUser: boolean;
+}
+
 export interface GameState {
   id: string; // Unique UUID for this game
   grid: Tile[][];
@@ -407,6 +453,10 @@ export interface GameState {
   waterBodies: WaterBody[];
   gameVersion: number; // Increments when a new game starts - used to clear transient state like vehicles
   cities: City[]; // Cities in the map (for multi-city support)
+  playerBalance?: number; // Personal wallet balance of the local player
+  leaderboard?: LeaderboardEntry[]; // Top players by wealth
+  floatingTexts: FloatingText[]; // Active floating text animations
+  activityLog: ActivityLogEntry[]; // Recent global events
 }
 
 // Saved city metadata for the multi-save system
@@ -494,4 +544,8 @@ export const BUILDING_STATS: Record<BuildingType, { maxPop: number; maxJobs: num
   park_gate: { maxPop: 0, maxJobs: 1, pollution: -2, landValue: 8 },
   mountain_lodge: { maxPop: 0, maxJobs: 15, pollution: -5, landValue: 35 },
   mountain_trailhead: { maxPop: 0, maxJobs: 2, pollution: -10, landValue: 15 },
+  // Multiplayer buildings
+  global_market: { maxPop: 0, maxJobs: 150, pollution: 5, landValue: 60 },
+  central_bank: { maxPop: 0, maxJobs: 80, pollution: 2, landValue: 70 },
+  trade_embassy: { maxPop: 0, maxJobs: 60, pollution: 2, landValue: 80 },
 };

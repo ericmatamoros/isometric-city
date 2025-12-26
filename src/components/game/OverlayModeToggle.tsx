@@ -39,6 +39,7 @@ const OVERLAY_ICONS: Record<OverlayMode, React.ReactNode> = {
   health: <HealthIcon size={14} />,
   education: <EducationIcon size={14} />,
   subway: <SubwayIcon size={14} />,
+  ownership: <div className="w-3.5 h-3.5 rounded-full border-2 border-current" />, // Simple circle icon for now
 };
 
 // ============================================================================
@@ -63,7 +64,7 @@ export const OverlayModeToggle = React.memo(function OverlayModeToggle({
         {(Object.keys(OVERLAY_CONFIG) as OverlayMode[]).map((mode) => {
           const config = OVERLAY_CONFIG[mode];
           const isActive = overlayMode === mode;
-          
+
           return (
             <Button
               key={mode}

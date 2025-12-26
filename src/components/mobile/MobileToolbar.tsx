@@ -206,7 +206,7 @@ const toolCategories = {
   'SPECIAL': ['stadium', 'museum', 'airport', 'space_program', 'city_hall', 'amusement_park'] as Tool[],
 };
 
-type OverlayMode = 'none' | 'power' | 'water' | 'fire' | 'police' | 'health' | 'education' | 'subway';
+import { OverlayMode } from '@/components/game/types';
 
 interface MobileToolbarProps {
   onOpenPanel: (panel: 'budget' | 'statistics' | 'advisors' | 'settings') => void;
@@ -465,6 +465,14 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
                     onClick={() => setOverlayMode('subway')}
                   >
                     Subway
+                  </Button>
+                  <Button
+                    variant={overlayMode === 'ownership' ? 'default' : 'ghost'}
+                    size="sm"
+                    className={`h-10 w-full text-xs ${overlayMode === 'ownership' ? 'bg-indigo-500 hover:bg-indigo-600' : ''}`}
+                    onClick={() => setOverlayMode('ownership')}
+                  >
+                    Owners
                   </Button>
                 </div>
               </div>

@@ -18,6 +18,9 @@ const IMAGE_QUALITY = 75;
 // Image cache for building sprites
 const imageCache = new Map<string, HTMLImageElement>();
 
+// WebP support cache
+let webpSupported: boolean | null = null;
+
 /**
  * Gets the optimized image URL using Next.js image optimization API
  * This converts images to WebP/AVIF format with compression for faster loading

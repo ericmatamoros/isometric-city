@@ -15,6 +15,7 @@ import {
   AdjacentCity,
   WaterBody,
   BridgeType,
+  BridgeVariant,
   BridgeInfo,
   BUILDING_STATS,
   RESIDENTIAL_BUILDINGS,
@@ -946,18 +947,19 @@ function createBridgeInfoForWaterRoad(
       const adjacentTile = grid[y + dy][x + dx];
 
       // If adjacent road has bridge info, extend it
-      if (adjacentTile.building.bridgeInfo) {
-        const existingBridge = adjacentTile.building.bridgeInfo;
+      const b = adjacentTile.building;
+      if (b.bridgeType) {
         // Check if we're extending in the same direction
-        if (existingBridge.orientation === orientation) {
+        if (b.bridgeOrientation === orientation) {
+          const config = BRIDGE_TYPE_CONFIG[b.bridgeType];
           return {
-            bridgeId: existingBridge.bridgeId,
-            bridgeType: existingBridge.bridgeType,
-            variant: existingBridge.variant,
-            span: existingBridge.span + 1, // Will be recalculated when bridge is complete
-            position: existingBridge.position + 1,
-            orientation: existingBridge.orientation,
-            height: existingBridge.height,
+            bridgeId: `bridge_${x}_${y}`,
+            bridgeType: b.bridgeType,
+            variant: (b.bridgeVariant as BridgeVariant) || 0,
+            span: (b.bridgeSpan || 0) + 1, // Will be recalculated when bridge is complete
+            position: (b.bridgeIndex || 0) + 1,
+            orientation: b.bridgeOrientation || 'ns',
+            height: config.height,
           };
         }
       }
@@ -1017,16 +1019,12 @@ function updateBridgeSpanInfo(
     let cy = y + dy;
     while (cx >= 0 && cx < gridSize && cy >= 0 && cy < gridSize) {
       const tile = grid[cy][cx];
-      if (tile.building.type === 'road' && tile.building.bridgeInfo?.bridgeId === bridgeId) {
+      if (tile.building.type === 'road' && tile.building.bridgeType &&
+        tile.building.bridgeType === bridgeInfo.bridgeType &&
+        tile.building.bridgeOrientation === orientation) {
         bridgeTiles.push({ x: cx, y: cy });
         cx += dx;
         cy += dy;
-      } else if (tile.building.type === 'road' && tile.building.bridgeInfo) {
-        // Different bridge, stop
-        break;
-      } else if (tile.building.type === 'road') {
-        // Road without bridge info (land road), stop
-        break;
       } else {
         break;
       }
@@ -1047,14 +1045,11 @@ function updateBridgeSpanInfo(
 
   for (let i = 0; i < bridgeTiles.length; i++) {
     const tile = grid[bridgeTiles[i].y][bridgeTiles[i].x];
-    if (tile.building.bridgeInfo) {
-      tile.building.bridgeInfo = {
-        ...tile.building.bridgeInfo,
-        span,
-        position: i,
-        bridgeType: newBridgeType,
-        height: newConfig.height,
-      };
+    if (tile.building.bridgeType) {
+      tile.building.bridgeSpan = span;
+      tile.building.bridgeIndex = i;
+      tile.building.bridgeType = newBridgeType;
+      // height is not stored on building, derived from type
     }
   }
 }
@@ -1495,6 +1490,8 @@ export function createInitialGameState(size: number = DEFAULT_GRID_SIZE, cityNam
     waterBodies,
     gameVersion: 0,
     cities: [defaultCity],
+    floatingTexts: [],
+    activityLog: [],
   };
 }
 
@@ -2803,6 +2800,13 @@ export function simulateTick(state: GameState): GameState {
     advisorMessages,
     notifications: newNotifications,
     history,
+    floatingTexts: (state.floatingTexts || [])
+      .map(ft => ({
+        ...ft,
+        life: ft.life - 0.02,
+        opacity: Math.max(0, ft.life - 0.02)
+      }))
+      .filter(ft => ft.life > 0),
   };
 }
 
@@ -3084,7 +3088,14 @@ export function placeBuilding(
       const bridgeInfo = createBridgeInfoForWaterRoad(state.grid, state.gridSize, x, y);
 
       newGrid[y][x].building = createBuilding('road');
-      newGrid[y][x].building.bridgeInfo = bridgeInfo || undefined;
+      if (bridgeInfo) {
+        const b = newGrid[y][x].building;
+        b.bridgeType = bridgeInfo.bridgeType;
+        b.bridgeVariant = bridgeInfo.variant;
+        b.bridgeSpan = bridgeInfo.span;
+        b.bridgeIndex = bridgeInfo.position;
+        b.bridgeOrientation = bridgeInfo.orientation;
+      }
       newGrid[y][x].zone = 'none';
 
       // Update bridge info for all connected bridge tiles to have correct span

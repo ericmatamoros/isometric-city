@@ -130,6 +130,19 @@ export interface SpritePack {
   stationsHorizontalOffsets?: Record<string, number>;
   // Per-building-type scale adjustments for STATIONS sprite sheet buildings
   stationsScales?: Record<string, number>;
+  // Path to the multiplayer sprite sheet (new buildings)
+  multiplayerSrc?: string;
+  // Multiplayer layout configuration
+  multiplayerCols?: number;
+  multiplayerRows?: number;
+  // Multiplayer buildings: maps building type to position in multiplayer sprite sheet
+  multiplayerBuildings?: Record<string, { row: number; col: number }>;
+  // Per-building-type vertical offset adjustments for MULTIPLAYER sprite sheet buildings
+  multiplayerVerticalOffsets?: Record<string, number>;
+  // Per-building-type horizontal offset adjustments for MULTIPLAYER sprite sheet buildings
+  multiplayerHorizontalOffsets?: Record<string, number>;
+  // Per-building-type scale adjustments for MULTIPLAYER sprite sheet buildings
+  multiplayerScales?: Record<string, number>;
   // Maps building types to sprite keys in spriteOrder
   buildingToSprite: Record<string, string>;
   // Optional global scale multiplier for all sprites in this pack
@@ -375,7 +388,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
   },
   parksVerticalOffsets: {
     // Same approach as denseVerticalOffsets - adjust as needed for proper positioning
-    basketball_courts: -0.25, 
+    basketball_courts: -0.25,
     playground_small: -0.25,  // shifted up 0.1
     playground_large: -0.60,  // shifted down 0.05 from -0.65
     baseball_field_small: -0.55,  // shifted down 0.3 from -0.85
@@ -505,6 +518,25 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
   stationsHorizontalOffsets: {},
   stationsScales: {
     rail_station: 0.85, // Scale down 15% for better fit
+  },
+  // Multiplayer sprite sheet configuration
+  multiplayerSrc: '/assets/multiplayer_buildings.png',
+  multiplayerCols: 3,
+  multiplayerRows: 1,
+  multiplayerBuildings: {
+    global_market: { row: 0, col: 0 },
+    central_bank: { row: 0, col: 1 },
+    trade_embassy: { row: 0, col: 2 },
+  },
+  multiplayerVerticalOffsets: {
+    global_market: -0.8,
+    central_bank: -0.8,
+    trade_embassy: -0.8,
+  },
+  multiplayerScales: {
+    global_market: 0.9,
+    central_bank: 0.9,
+    trade_embassy: 0.9,
   },
   buildingToSprite: {
     house_small: 'house_small',
@@ -662,22 +694,38 @@ export function getSpriteCoords(
   pack?: SpritePack
 ): { sx: number; sy: number; sw: number; sh: number } | null {
   const activePack = pack || _activeSpritePack;
-  
+
+  // Check if this is a multiplayer building
+  const isMultiplayerBuilding = activePack.multiplayerBuildings && activePack.multiplayerBuildings[buildingType];
+
+  if (isMultiplayerBuilding) {
+    const { row, col } = activePack.multiplayerBuildings![buildingType];
+    const tileWidth = Math.floor(spriteSheetWidth / (activePack.multiplayerCols || 1));
+    const tileHeight = Math.floor(spriteSheetHeight / (activePack.multiplayerRows || 1));
+
+    return {
+      sx: col * tileWidth,
+      sy: row * tileHeight,
+      sw: tileWidth,
+      sh: tileHeight,
+    };
+  }
+
   // First, map building type to sprite key
   const spriteKey = activePack.buildingToSprite[buildingType];
   if (!spriteKey) return null;
-  
+
   // Find index in sprite order
   const index = activePack.spriteOrder.indexOf(spriteKey);
   if (index === -1) return null;
-  
+
   // Calculate tile dimensions
   const tileWidth = Math.floor(spriteSheetWidth / activePack.cols);
   const tileHeight = Math.floor(spriteSheetHeight / activePack.rows);
-  
+
   let col: number;
   let row: number;
-  
+
   if (activePack.layout === 'column') {
     col = Math.floor(index / activePack.rows);
     row = index % activePack.rows;
@@ -685,7 +733,7 @@ export function getSpriteCoords(
     col = index % activePack.cols;
     row = Math.floor(index / activePack.cols);
   }
-  
+
   // Special handling for sprites4-based packs: rows 1-4 include content from rows above, shift source Y down
   // This applies to sprites4 and all its themed variants (harry, china, etc.)
   const isSprites4Based = activePack.id.startsWith('sprites4');
@@ -704,7 +752,7 @@ export function getSpriteCoords(
     }
   }
   // Row 5: no shift to avoid cross-contamination
-  
+
   // Special handling for sprites4-based packs: adjust source height for certain sprites
   let sh = tileHeight;
   if (isSprites4Based) {
@@ -715,7 +763,7 @@ export function getSpriteCoords(
       sh = tileHeight * 0.92; // Crop 8% off the bottom
     }
   }
-  
+
   return {
     sx: col * tileWidth,
     sy: sy,
@@ -731,7 +779,7 @@ export function getSpriteOffsets(
 ): { vertical: number; horizontal: number } {
   const activePack = pack || _activeSpritePack;
   const spriteKey = activePack.buildingToSprite[buildingType];
-  
+
   return {
     vertical: spriteKey ? (activePack.verticalOffsets[spriteKey] ?? 0) : 0,
     horizontal: spriteKey ? (activePack.horizontalOffsets[spriteKey] ?? 0) : 0,

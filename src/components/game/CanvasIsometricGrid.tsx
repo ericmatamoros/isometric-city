@@ -117,9 +117,10 @@ import {
   RAIL_COLORS,
 } from '@/components/game/railSystem';
 import {
-  drawBridgeTile,
+  renderBridgeTile,
   isBridgeTile,
   getBridgeDeckOffset,
+  getBridgeRenderInfo,
 } from '@/components/game/bridgeSystem';
 import {
   spawnTrain,
@@ -853,6 +854,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       if (currentSpritePack.modernSrc) {
         loadSpriteImage(currentSpritePack.modernSrc, true).catch(console.error);
       }
+      if (currentSpritePack.multiplayerSrc) {
+        loadSpriteImage(currentSpritePack.multiplayerSrc, true).catch(console.error);
+      }
       // Load airplane sprite sheet (always loaded, not dependent on sprite pack)
       loadSpriteImage(AIRPLANE_SPRITE_SRC, false).catch(console.error);
     };
@@ -1126,7 +1130,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         // Only draw pillar on every other tile to reduce count, and place at back position (0.35)
         // Water tiles toward startEdge are rendered BEFORE this bridge tile, so pillar won't be covered
         // Suspension bridges don't need base pillars - they have tower supports instead
-        const shouldDrawPillar = bridgeType !== 'suspension' && ((bridgeIndex % 2 === 0) || position === 'start' || position === 'end');
+        const shouldDrawPillar = bridgeType !== 'suspension_bridge' && ((bridgeIndex % 2 === 0) || position === 'start' || position === 'end');
 
         if (shouldDrawPillar) {
           // Place pillar toward the "start" edge (back in render order) - water there is already drawn
@@ -1273,7 +1277,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         const endRight = { x: extendedEndEdge.x - perpX * halfWidth, y: endY - perpY * halfWidth };
 
         // Draw suspension bridge towers BEFORE the deck so deck appears on top
-        if (bridgeType === 'suspension' && currentZoom >= 0.5) {
+        if (bridgeType === 'suspension_bridge' && currentZoom >= 0.5) {
           // Tower perpendicular (true 90°)
           const tDx = endEdge.x - startEdge.x;
           const tDy = endEdge.y - startEdge.y;
@@ -1574,7 +1578,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         building: Building,
         currentZoom: number
       ) {
-        if (building.bridgeType !== 'suspension' || currentZoom < 0.5) return;
+        if (building.bridgeType !== 'suspension_bridge' || currentZoom < 0.5) return;
 
         const w = TILE_WIDTH;
         const h = TILE_HEIGHT;
@@ -1697,7 +1701,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         building: Building,
         currentZoom: number
       ) {
-        if (building.bridgeType !== 'suspension' || currentZoom < 0.5) return;
+        if (building.bridgeType !== 'suspension_bridge' || currentZoom < 0.5) return;
 
         const w = TILE_WIDTH;
         const h = TILE_HEIGHT;
@@ -2257,6 +2261,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
             let useShopVariant: { row: number; col: number } | null = null;
             let useStationVariant: { row: number; col: number } | null = null;
             let useParksBuilding: { row: number; col: number } | null = null;
+            let useMultiplayerBuilding: { row: number; col: number } | null = null;
 
             // Check if this is a parks building first
             const isParksBuilding = activePack.parksBuildings && activePack.parksBuildings[buildingType];
@@ -2274,6 +2279,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               // Check if this building type is from the parks sprite sheet
               useParksBuilding = activePack.parksBuildings![buildingType];
               spriteSource = activePack.parksSrc;
+            } else if (activePack.multiplayerBuildings && activePack.multiplayerBuildings[buildingType] && activePack.multiplayerSrc) {
+              // Check if this is a multiplayer building
+              useMultiplayerBuilding = activePack.multiplayerBuildings[buildingType];
+              spriteSource = activePack.multiplayerSrc;
             } else if (activePack.denseSrc && activePack.denseVariants && activePack.denseVariants[buildingType]) {
               // Check if this building type has dense variants available
               const denseVariants = activePack.denseVariants[buildingType];
@@ -2530,7 +2539,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
                 };
               } else {
                 // getSpriteCoords handles building type to sprite key mapping
-                coords = getSpriteCoords(buildingType, sheetWidth, sheetHeight);
+                coords = getSpriteCoords(buildingType, sheetWidth, sheetHeight, activePack);
 
                 // Special cropping for factory_large base sprite - crop bottom to remove asset below
                 if (buildingType === 'factory_large' && coords) {
@@ -3003,12 +3012,13 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         const { tile, screenX, screenY } = roadQueue[i];
 
         // Check if this is a bridge tile (road over water)
-        if (isBridgeTile(tile) && tile.building.bridgeInfo) {
+        const bridgeInfo = getBridgeRenderInfo(tile);
+        if (bridgeInfo) {
           // Draw bridge with elevated deck and structure
-          drawBridgeTile(ctx, screenX, screenY, tile.building.bridgeInfo, zoom);
+          renderBridgeTile(ctx, screenX, screenY, bridgeInfo, zoom);
 
           // Draw road markings on the bridge deck (with Y offset for height)
-          const deckOffset = getBridgeDeckOffset(tile.building.bridgeInfo);
+          const deckOffset = getBridgeDeckOffset(bridgeInfo);
           drawBuilding(ctx, screenX, screenY - deckOffset, tile);
         } else {
           // Draw normal road base tile first (grey diamond)
@@ -3028,8 +3038,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         // If this road has a rail overlay, draw just the rail tracks (ties and rails, no ballast)
         // Crossing signals/gates are drawn later (after rail tiles) to avoid z-order issues
         if (tile.hasRailOverlay) {
-          const trackYOffset = isBridgeTile(tile) && tile.building.bridgeInfo
-            ? getBridgeDeckOffset(tile.building.bridgeInfo)
+          const trackYOffset = bridgeInfo
+            ? getBridgeDeckOffset(bridgeInfo)
             : 0;
           drawRailTracksOnly(ctx, screenX, screenY - trackYOffset, tile.x, tile.y, grid, gridSize, zoom);
         }
@@ -3088,7 +3098,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       // Only the front tower is drawn here (back tower was drawn before deck in drawBridgeTile)
       for (let i = 0; i < bridgeQueue.length; i++) {
         const { tile, screenX, screenY } = bridgeQueue[i];
-        if (tile.building.bridgeType === 'suspension') {
+        if (tile.building.bridgeType === 'suspension_bridge') {
           drawSuspensionBridgeTowers(ctx, screenX, screenY, tile.building, zoom);
         }
       }
@@ -3178,7 +3188,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           // These need to appear above nearby buildings for proper visual layering
           for (let i = 0; i < bridgeQueue.length; i++) {
             const { tile, screenX, screenY } = bridgeQueue[i];
-            if (tile.building.bridgeType === 'suspension') {
+            if (tile.building.bridgeType === 'suspension_bridge') {
               drawSuspensionBridgeTowers(buildingsCtx, screenX, screenY, tile.building, zoom);
             }
           }
@@ -3186,7 +3196,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           // Draw suspension bridge cables ON TOP of towers
           for (let i = 0; i < bridgeQueue.length; i++) {
             const { tile, screenX, screenY } = bridgeQueue[i];
-            if (tile.building.bridgeType === 'suspension') {
+            if (tile.building.bridgeType === 'suspension_bridge') {
               drawSuspensionBridgeOverlay(buildingsCtx, screenX, screenY, tile.building, zoom);
             }
           }
@@ -3327,6 +3337,33 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           }
         }
 
+        ctx.restore();
+      }
+
+      // Render floating texts
+      if (state.floatingTexts && state.floatingTexts.length > 0) {
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = `bold ${Math.max(12, 14 / zoom)}px sans-serif`;
+
+        for (const ft of state.floatingTexts) {
+          const { screenX, screenY } = gridToScreen(ft.x, ft.y, 0, 0);
+          // Animate upwards based on life
+          const yOffset = (1 - ft.life) * 50;
+
+          ctx.globalAlpha = ft.opacity;
+          ctx.fillStyle = ft.color;
+          // White outline for readability
+          ctx.strokeStyle = 'white';
+          ctx.lineWidth = 2;
+
+          const x = screenX + TILE_WIDTH / 2;
+          const y = screenY - yOffset;
+
+          ctx.strokeText(ft.text, x, y);
+          ctx.fillText(ft.text, x, y);
+        }
         ctx.restore();
       }
 
@@ -4563,8 +4600,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
 
         return (
           <div className={`absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-md text-sm ${isWaterfrontPlacementInvalid
-              ? 'bg-destructive/90 border border-destructive-foreground/30 text-destructive-foreground'
-              : 'bg-card/90 border border-border'
+            ? 'bg-destructive/90 border border-destructive-foreground/30 text-destructive-foreground'
+            : 'bg-card/90 border border-border'
             }`}>
             {isDragging && dragStartTile && dragEndTile && showsDragGrid ? (
               <>

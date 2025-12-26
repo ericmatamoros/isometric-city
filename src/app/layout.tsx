@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from 'next';
 import { Playfair_Display, DM_Sans } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/next';
 import './globals.css';
+import { WalletProvider } from '@/context/WalletContext';
+import { SocketProvider } from '@/context/SocketContext';
 
 const playfair = Playfair_Display({
   subsets: ['latin'],
@@ -91,7 +93,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           type="image/webp"
         />
       </head>
-      <body className="bg-background text-foreground antialiased font-sans overflow-hidden">{children}<Analytics /></body>
+      <body className="bg-background text-foreground antialiased font-sans overflow-hidden">
+        <WalletProvider>
+          <SocketProvider>
+            {children}
+          </SocketProvider>
+        </WalletProvider>
+        <Analytics />
+      </body>
     </html>
   );
 }

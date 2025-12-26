@@ -17,7 +17,7 @@ import {
   getRandomBeachTile,
   spawnPedestrianAtBeach,
 } from './pedestrianSystem';
-import { isBridgeTile, getBridgeDeckOffset } from './bridgeSystem';
+import { isBridgeTile, getBridgeDeckOffset, getBridgeRenderInfo } from './bridgeSystem';
 
 /** Train type for crossing detection (minimal interface) */
 export interface TrainForCrossing {
@@ -88,15 +88,15 @@ export function useVehicleSystems(
   const spawnRandomCar = useCallback(() => {
     const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
     if (!currentGrid || currentGridSize <= 0) return false;
-    
+
     for (let attempt = 0; attempt < 20; attempt++) {
       const tileX = Math.floor(Math.random() * currentGridSize);
       const tileY = Math.floor(Math.random() * currentGridSize);
       if (!isRoadTile(currentGrid, currentGridSize, tileX, tileY)) continue;
-      
+
       const options = getDirectionOptions(currentGrid, currentGridSize, tileX, tileY);
       if (options.length === 0) continue;
-      
+
       const direction = options[Math.floor(Math.random() * options.length)];
       // Lane offset based on direction for proper right-hand traffic
       // Positive offset = right side of road in direction of travel
@@ -104,10 +104,10 @@ export function useVehicleSystems(
       // North and East get positive offset, South and West get negative
       const laneSign = (direction === 'north' || direction === 'east') ? 1 : -1;
       // Cars have a limited lifespan - shorter on mobile to reduce crowding
-      const carMaxAge = isMobile 
+      const carMaxAge = isMobile
         ? 25 + Math.random() * 15   // 25-40 seconds on mobile
         : 45 + Math.random() * 30; // 45-75 seconds on desktop
-      
+
       carsRef.current.push({
         id: carIdRef.current++,
         tileX,
@@ -122,7 +122,7 @@ export function useVehicleSystems(
       });
       return true;
     }
-    
+
     return false;
   }, [worldStateRef, carsRef, carIdRef, isMobile]);
 
@@ -157,20 +157,20 @@ export function useVehicleSystems(
   const spawnPedestrian = useCallback(() => {
     const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
     if (!currentGrid || currentGridSize <= 0) return false;
-    
+
     const residentials = findResidentialBuildingsCallback();
     if (residentials.length === 0) {
       return false;
     }
-    
+
     const destinations = findPedestrianDestinationsCallback();
     if (destinations.length === 0) {
       return false;
     }
-    
+
     // Choose spawn type - more variety in pedestrian spawning
     const spawnType = Math.random();
-    
+
     // 10% - Pedestrian at the beach (swimming or on mat)
     if (spawnType < 0.10) {
       const beachTiles = findBeachTilesCallback();
@@ -186,7 +186,7 @@ export function useVehicleSystems(
             home.x,
             home.y
           );
-          
+
           if (ped) {
             pedestriansRef.current.push(ped);
             return true;
@@ -195,13 +195,13 @@ export function useVehicleSystems(
       }
       // If no beach tiles, fall through to other spawn types
     }
-    
+
     // 55% - Normal walking pedestrian heading to a destination
     if (spawnType < 0.65) {
       const home = residentials[Math.floor(Math.random() * residentials.length)];
-      
+
       let dest = destinations[Math.floor(Math.random() * destinations.length)];
-      
+
       // 40% chance to re-roll and specifically pick a sports/active facility if available
       // These are rarer in most cities so we boost their selection probability
       if (Math.random() < 0.4 && dest.type === 'park') {
@@ -216,15 +216,15 @@ export function useVehicleSystems(
           dest = boostedDests[Math.floor(Math.random() * boostedDests.length)];
         }
       }
-      
+
       const path = findPathOnRoads(currentGrid, currentGridSize, home.x, home.y, dest.x, dest.y);
       if (!path || path.length === 0) {
         return false;
       }
-      
+
       const startIndex = Math.floor(Math.random() * path.length);
       const startTile = path[startIndex];
-      
+
       let direction: CarDirection = 'south';
       if (startIndex + 1 < path.length) {
         const nextTile = path[startIndex + 1];
@@ -235,7 +235,7 @@ export function useVehicleSystems(
         const dir = getDirectionToTile(prevTile.x, prevTile.y, startTile.x, startTile.y);
         if (dir) direction = dir;
       }
-      
+
       const ped = createPedestrian(
         pedestrianIdRef.current++,
         home.x,
@@ -247,21 +247,21 @@ export function useVehicleSystems(
         startIndex,
         direction
       );
-      
+
       pedestriansRef.current.push(ped);
       return true;
     }
-    
+
     // 22% - Pedestrian already at a recreation area
     if (spawnType < 0.87) {
       const recreationAreas = findRecreationAreasCallback();
       if (recreationAreas.length === 0) return false;
-      
+
       let area = recreationAreas[Math.floor(Math.random() * recreationAreas.length)];
-      
+
       // 50% chance to re-roll and pick a sports/active facility if available
       if (Math.random() < 0.5) {
-        const sportsAreas = recreationAreas.filter(a => 
+        const sportsAreas = recreationAreas.filter(a =>
           SPORTS_TYPES.includes(a.buildingType) || ACTIVE_RECREATION_TYPES.includes(a.buildingType)
         );
         if (sportsAreas.length > 0) {
@@ -269,7 +269,7 @@ export function useVehicleSystems(
         }
       }
       const home = residentials[Math.floor(Math.random() * residentials.length)];
-      
+
       const ped = spawnPedestrianAtRecreation(
         pedestrianIdRef.current++,
         area.x,
@@ -279,21 +279,21 @@ export function useVehicleSystems(
         home.x,
         home.y
       );
-      
+
       if (ped) {
         pedestriansRef.current.push(ped);
         return true;
       }
       return false;
     }
-    
+
     // 15% - Pedestrian exiting from a building
     const enterableBuildings = findEnterableBuildingsCallback();
     if (enterableBuildings.length === 0) return false;
-    
+
     const building = enterableBuildings[Math.floor(Math.random() * enterableBuildings.length)];
     const home = residentials[Math.floor(Math.random() * residentials.length)];
-    
+
     const ped = spawnPedestrianFromBuilding(
       pedestrianIdRef.current++,
       building.x,
@@ -303,7 +303,7 @@ export function useVehicleSystems(
       home.x,
       home.y
     );
-    
+
     if (ped) {
       pedestriansRef.current.push(ped);
       return true;
@@ -324,64 +324,64 @@ export function useVehicleSystems(
   const spawnCrimeIncidents = useCallback((delta: number) => {
     const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed } = worldStateRef.current;
     if (!currentGrid || currentGridSize <= 0 || currentSpeed === 0) return;
-    
+
     const speedMultiplier = currentSpeed === 1 ? 1 : currentSpeed === 2 ? 2 : 3;
     crimeSpawnTimerRef.current -= delta * speedMultiplier;
-    
+
     if (crimeSpawnTimerRef.current > 0) return;
     crimeSpawnTimerRef.current = 3 + Math.random() * 2;
-    
+
     const eligibleTiles: { x: number; y: number; policeCoverage: number }[] = [];
-    
+
     for (let y = 0; y < currentGridSize; y++) {
       for (let x = 0; x < currentGridSize; x++) {
         const tile = currentGrid[y][x];
-        const isBuilding = tile.building.type !== 'grass' && 
-            tile.building.type !== 'water' && 
-            tile.building.type !== 'road' && 
-            tile.building.type !== 'bridge' && 
-            tile.building.type !== 'tree' &&
-            tile.building.type !== 'empty';
+        const isBuilding = tile.building.type !== 'grass' &&
+          tile.building.type !== 'water' &&
+          tile.building.type !== 'road' &&
+          tile.building.type !== 'bridge' &&
+          tile.building.type !== 'tree' &&
+          tile.building.type !== 'empty';
         const hasActivity = tile.building.population > 0 || tile.building.jobs > 0;
-        
+
         if (isBuilding && hasActivity) {
           const policeCoverage = state.services.police[y]?.[x] || 0;
           eligibleTiles.push({ x, y, policeCoverage });
         }
       }
     }
-    
+
     if (eligibleTiles.length === 0) return;
-    
+
     const avgCoverage = eligibleTiles.reduce((sum, t) => sum + t.policeCoverage, 0) / eligibleTiles.length;
     const baseChance = avgCoverage < 20 ? 0.4 : avgCoverage < 40 ? 0.25 : avgCoverage < 60 ? 0.15 : 0.08;
-    
+
     const population = state.stats.population;
     const maxActiveCrimes = Math.max(2, Math.floor(population / 500));
-    
+
     if (activeCrimeIncidentsRef.current.size >= maxActiveCrimes) return;
-    
+
     const crimesToSpawn = Math.random() < 0.3 ? 2 : 1;
-    
+
     for (let i = 0; i < crimesToSpawn; i++) {
       if (activeCrimeIncidentsRef.current.size >= maxActiveCrimes) break;
       if (Math.random() > baseChance) continue;
-      
+
       const weightedTiles = eligibleTiles.filter(t => {
         const key = `${t.x},${t.y}`;
         if (activeCrimeIncidentsRef.current.has(key)) return false;
         const weight = Math.max(0.1, 1 - t.policeCoverage / 100);
         return Math.random() < weight;
       });
-      
+
       if (weightedTiles.length === 0) continue;
-      
+
       const target = weightedTiles[Math.floor(Math.random() * weightedTiles.length)];
       const key = `${target.x},${target.y}`;
-      
+
       const crimeType = getRandomCrimeType();
       const duration = getCrimeDuration(crimeType);
-      
+
       activeCrimeIncidentsRef.current.set(key, {
         x: target.x,
         y: target.y,
@@ -394,14 +394,14 @@ export function useVehicleSystems(
   const updateCrimeIncidents = useCallback((delta: number) => {
     const { speed: currentSpeed } = worldStateRef.current;
     if (currentSpeed === 0) return;
-    
+
     const speedMultiplier = currentSpeed === 1 ? 1 : currentSpeed === 2 ? 2 : 3;
     const keysToDelete: string[] = [];
-    
+
     // PERF: Use for...of instead of forEach for Map iteration
     for (const [key, crime] of activeCrimeIncidentsRef.current) {
       if (activeCrimesRef.current.has(key)) continue;
-      
+
       const newTimeRemaining = crime.timeRemaining - delta * speedMultiplier;
       if (newTimeRemaining <= 0) {
         keysToDelete.push(key);
@@ -409,7 +409,7 @@ export function useVehicleSystems(
         activeCrimeIncidentsRef.current.set(key, { ...crime, timeRemaining: newTimeRemaining });
       }
     }
-    
+
     // PERF: Use for loop instead of forEach
     for (let i = 0; i < keysToDelete.length; i++) {
       activeCrimeIncidentsRef.current.delete(keysToDelete[i]);
@@ -435,7 +435,7 @@ export function useVehicleSystems(
 
     const startTile = path[0];
     let direction: CarDirection = 'south';
-    
+
     if (path.length >= 2) {
       const nextTile = path[1];
       const dir = getDirectionToTile(startTile.x, startTile.y, nextTile.x, nextTile.y);
@@ -468,17 +468,17 @@ export function useVehicleSystems(
   const updateEmergencyDispatch = useCallback(() => {
     const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed } = worldStateRef.current;
     if (!currentGrid || currentGridSize <= 0 || currentSpeed === 0) return;
-    
+
     const fires = findFiresCallback();
     const fireStations = findStationsCallback('fire_station');
-    
+
     for (const fire of fires) {
       const fireKey = `${fire.x},${fire.y}`;
       if (activeFiresRef.current.has(fireKey)) continue;
-      
+
       let nearestStation: { x: number; y: number } | null = null;
       let nearestDist = Infinity;
-      
+
       for (const station of fireStations) {
         const dist = Math.abs(station.x - fire.x) + Math.abs(station.y - fire.y);
         if (dist < nearestDist) {
@@ -486,7 +486,7 @@ export function useVehicleSystems(
           nearestStation = station;
         }
       }
-      
+
       if (nearestStation) {
         if (dispatchEmergencyVehicle('fire_truck', nearestStation.x, nearestStation.y, fire.x, fire.y)) {
           activeFiresRef.current.add(fireKey);
@@ -496,18 +496,18 @@ export function useVehicleSystems(
 
     const crimes = findCrimeIncidents();
     const policeStations = findStationsCallback('police_station');
-    
+
     let dispatched = 0;
     const maxDispatchPerCheck = Math.max(3, Math.min(6, policeStations.length * 2));
     for (const crime of crimes) {
       if (dispatched >= maxDispatchPerCheck) break;
-      
+
       const crimeKey = `${crime.x},${crime.y}`;
       if (activeCrimesRef.current.has(crimeKey)) continue;
-      
+
       let nearestStation: { x: number; y: number } | null = null;
       let nearestDist = Infinity;
-      
+
       for (const station of policeStations) {
         const dist = Math.abs(station.x - crime.x) + Math.abs(station.y - crime.y);
         if (dist < nearestDist) {
@@ -515,7 +515,7 @@ export function useVehicleSystems(
           nearestStation = station;
         }
       }
-      
+
       if (nearestStation) {
         if (dispatchEmergencyVehicle('police_car', nearestStation.x, nearestStation.y, crime.x, crime.y)) {
           activeCrimesRef.current.add(crimeKey);
@@ -533,7 +533,7 @@ export function useVehicleSystems(
     }
 
     const speedMultiplier = currentSpeed === 0 ? 0 : currentSpeed === 1 ? 1 : currentSpeed === 2 ? 2.5 : 4;
-    
+
     emergencyDispatchTimerRef.current -= delta;
     if (emergencyDispatchTimerRef.current <= 0) {
       updateEmergencyDispatch();
@@ -541,10 +541,10 @@ export function useVehicleSystems(
     }
 
     const updatedVehicles: EmergencyVehicle[] = [];
-    
+
     for (const vehicle of [...emergencyVehiclesRef.current]) {
       vehicle.flashTimer += delta * 8;
-      
+
       if (vehicle.state === 'responding') {
         if (!isRoadTile(currentGrid, currentGridSize, vehicle.tileX, vehicle.tileY)) {
           const targetKey = `${vehicle.targetX},${vehicle.targetY}`;
@@ -556,29 +556,29 @@ export function useVehicleSystems(
           }
           continue;
         }
-        
+
         vehicle.respondTime += delta * speedMultiplier;
         const respondDuration = vehicle.type === 'fire_truck' ? 8 : 5;
-        
+
         if (vehicle.respondTime >= respondDuration) {
           const targetKey = `${vehicle.targetX},${vehicle.targetY}`;
-          
+
           if (vehicle.type === 'police_car') {
             activeCrimeIncidentsRef.current.delete(targetKey);
           }
-          
+
           const returnPath = findPathOnRoads(
             currentGrid, currentGridSize,
             vehicle.tileX, vehicle.tileY,
             vehicle.stationX, vehicle.stationY
           );
-          
+
           if (returnPath && returnPath.length >= 2) {
             vehicle.path = returnPath;
             vehicle.pathIndex = 0;
             vehicle.state = 'returning';
             vehicle.progress = 0;
-            
+
             const nextTile = returnPath[1];
             const dir = getDirectionToTile(vehicle.tileX, vehicle.tileY, nextTile.x, nextTile.y);
             if (dir) vehicle.direction = dir;
@@ -600,11 +600,11 @@ export function useVehicleSystems(
             continue;
           }
         }
-        
+
         updatedVehicles.push(vehicle);
         continue;
       }
-      
+
       if (!isRoadTile(currentGrid, currentGridSize, vehicle.tileX, vehicle.tileY)) {
         const targetKey = `${vehicle.targetX},${vehicle.targetY}`;
         if (vehicle.type === 'fire_truck') {
@@ -615,9 +615,9 @@ export function useVehicleSystems(
         }
         continue;
       }
-      
-      if (vehicle.tileX < 0 || vehicle.tileX >= currentGridSize || 
-          vehicle.tileY < 0 || vehicle.tileY >= currentGridSize) {
+
+      if (vehicle.tileX < 0 || vehicle.tileX >= currentGridSize ||
+        vehicle.tileY < 0 || vehicle.tileY >= currentGridSize) {
         const targetKey = `${vehicle.targetX},${vehicle.targetY}`;
         if (vehicle.type === 'fire_truck') {
           activeFiresRef.current.delete(targetKey);
@@ -627,11 +627,11 @@ export function useVehicleSystems(
         }
         continue;
       }
-      
+
       vehicle.progress += vehicle.speed * delta * speedMultiplier;
-      
+
       let shouldRemove = false;
-      
+
       if (vehicle.path.length === 1 && vehicle.state === 'dispatching') {
         vehicle.state = 'responding';
         vehicle.respondTime = 0;
@@ -639,22 +639,22 @@ export function useVehicleSystems(
         updatedVehicles.push(vehicle);
         continue;
       }
-      
+
       while (vehicle.progress >= 1 && vehicle.pathIndex < vehicle.path.length - 1) {
         vehicle.pathIndex++;
         vehicle.progress -= 1;
-        
+
         const currentTile = vehicle.path[vehicle.pathIndex];
-        
-        if (currentTile.x < 0 || currentTile.x >= currentGridSize || 
-            currentTile.y < 0 || currentTile.y >= currentGridSize) {
+
+        if (currentTile.x < 0 || currentTile.x >= currentGridSize ||
+          currentTile.y < 0 || currentTile.y >= currentGridSize) {
           shouldRemove = true;
           break;
         }
-        
+
         vehicle.tileX = currentTile.x;
         vehicle.tileY = currentTile.y;
-        
+
         if (vehicle.pathIndex >= vehicle.path.length - 1) {
           if (vehicle.state === 'dispatching') {
             vehicle.state = 'responding';
@@ -665,14 +665,14 @@ export function useVehicleSystems(
           }
           break;
         }
-        
+
         if (vehicle.pathIndex + 1 < vehicle.path.length) {
           const nextTile = vehicle.path[vehicle.pathIndex + 1];
           const dir = getDirectionToTile(vehicle.tileX, vehicle.tileY, nextTile.x, nextTile.y);
           if (dir) vehicle.direction = dir;
         }
       }
-      
+
       if (shouldRemove) {
         const targetKey = `${vehicle.targetX},${vehicle.targetY}`;
         if (vehicle.type === 'fire_truck') {
@@ -683,10 +683,10 @@ export function useVehicleSystems(
         }
         continue;
       }
-      
+
       updatedVehicles.push(vehicle);
     }
-    
+
     emergencyVehiclesRef.current = updatedVehicles;
   }, [worldStateRef, emergencyVehiclesRef, emergencyDispatchTimerRef, updateEmergencyDispatch, activeFiresRef, activeCrimesRef, activeCrimeIncidentsRef]);
 
@@ -699,7 +699,7 @@ export function useVehicleSystems(
 
   const updateCars = useCallback((delta: number) => {
     const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed, zoom: currentZoom } = worldStateRef.current;
-    
+
     // Clear cars if zoomed out too far (use mobile threshold on mobile for better perf)
     // Also use far zoom threshold for desktop when very zoomed out (for large maps)
     const carMinZoom = isMobile ? CAR_MIN_ZOOM_MOBILE : CAR_MIN_ZOOM;
@@ -708,14 +708,14 @@ export function useVehicleSystems(
       carsRef.current = [];
       return;
     }
-    
+
     // Don't clear cars if grid is temporarily unavailable - just skip update
     if (!currentGrid || currentGridSize <= 0) {
       return;
     }
-    
+
     const speedMultiplier = currentSpeed === 0 ? 0 : currentSpeed === 1 ? 1 : currentSpeed === 2 ? 2.5 : 4;
-    
+
     const baseMaxCars = 85;  // Reduced ~15%
     const maxCars = Math.min(baseMaxCars, Math.max(13, Math.floor(currentGridSize * 1.06)));
     carSpawnTimerRef.current -= delta;
@@ -730,11 +730,11 @@ export function useVehicleSystems(
       }
       carSpawnTimerRef.current = spawnedCount > 0 ? 0.3 + Math.random() * 0.4 : 0.1;
     }
-    
+
     // Get current traffic light state
     const trafficTime = trafficLightTimerRef.current;
     const lightState = getTrafficLightState(trafficTime);
-    
+
     // Build spatial index of cars by tile for efficient collision detection
     // PERF: Use numeric keys (y * gridSize + x) instead of string keys
     const carsByTile = new Map<number, Car[]>();
@@ -743,7 +743,7 @@ export function useVehicleSystems(
       if (!carsByTile.has(key)) carsByTile.set(key, []);
       carsByTile.get(key)!.push(car);
     }
-    
+
     const updatedCars: Car[] = [];
     for (const car of [...carsRef.current]) {
       // Update car age and remove if too old
@@ -751,7 +751,7 @@ export function useVehicleSystems(
       if (car.age > car.maxAge) {
         continue; // Car has exceeded its lifespan
       }
-      
+
       // Skip update if car is somehow off the road, but keep it alive
       const onRoad = isRoadTile(currentGrid, currentGridSize, car.tileX, car.tileY);
       if (!onRoad) {
@@ -781,17 +781,17 @@ export function useVehicleSystems(
         updatedCars.push(car);
         continue;
       }
-      
+
       // Check if approaching an intersection with red light
       // Only stop BEFORE entering the intersection, never while inside it
       let shouldStop = false;
-      
+
       const meta = DIRECTION_META[car.direction];
       const nextX = car.tileX + meta.step.x;
       const nextY = car.tileY + meta.step.y;
       const currentIsIntersection = isIntersection(currentGrid, currentGridSize, car.tileX, car.tileY);
       const nextIsIntersection = isIntersection(currentGrid, currentGridSize, nextX, nextY);
-      
+
       // If we're NOT in an intersection and the next tile IS an intersection
       if (!currentIsIntersection && nextIsIntersection) {
         // Check immediately and stop well before the intersection
@@ -799,12 +799,12 @@ export function useVehicleSystems(
           shouldStop = true;
         }
       }
-      
+
       // Check for railroad crossing ahead
       // Stop if approaching a crossing with a train nearby
       if (!shouldStop) {
         const trains = trainsRef.current;
-        
+
         // Check current tile (if we're about to enter a crossing)
         if (isRailroadCrossing(currentGrid, currentGridSize, car.tileX, car.tileY)) {
           // We're on a crossing - check if a train is approaching/occupying it
@@ -816,7 +816,7 @@ export function useVehicleSystems(
             // Otherwise, keep moving through to clear the crossing
           }
         }
-        
+
         // Check next tile (approaching a crossing)
         if (!shouldStop && car.progress > 0.5 && isRailroadCrossing(currentGrid, currentGridSize, nextX, nextY)) {
           if (shouldStopAtCrossing(trains, nextX, nextY)) {
@@ -824,7 +824,7 @@ export function useVehicleSystems(
           }
         }
       }
-      
+
       // Check for car ahead - efficient spatial lookup
       // Only check cars going the SAME direction (same lane)
       if (!shouldStop) {
@@ -842,7 +842,7 @@ export function useVehicleSystems(
             }
           }
         }
-        
+
         // Check next tile for car in same lane we might hit
         if (!shouldStop && car.progress > 0.7) {
           // PERF: Use numeric key lookup
@@ -856,19 +856,19 @@ export function useVehicleSystems(
           }
         }
       }
-      
+
       if (!shouldStop) {
         car.progress += car.speed * delta * speedMultiplier;
       }
       // When stopped, just don't move - no position changes
-      
+
       let guard = 0;
       while (car.progress >= 1 && guard < 4) {
         guard++;
         const meta = DIRECTION_META[car.direction];
         const newTileX = car.tileX + meta.step.x;
         const newTileY = car.tileY + meta.step.y;
-        
+
         // Check if next tile is a valid road
         if (!isRoadTile(currentGrid, currentGridSize, newTileX, newTileY)) {
           // Can't move forward - turn around on current tile
@@ -876,7 +876,7 @@ export function useVehicleSystems(
           if (options.length > 0) {
             // Pick any valid direction (preferring not the one we were going)
             const otherOptions = options.filter(d => d !== car.direction);
-            const newDir = otherOptions.length > 0 
+            const newDir = otherOptions.length > 0
               ? otherOptions[Math.floor(Math.random() * otherOptions.length)]
               : options[Math.floor(Math.random() * options.length)];
             car.direction = newDir;
@@ -890,12 +890,12 @@ export function useVehicleSystems(
           }
           break;
         }
-        
+
         // Move to the new tile
         car.tileX = newTileX;
         car.tileY = newTileY;
         car.progress -= 1;
-        
+
         // Pick next direction
         const nextDirection = pickNextDirection(car.direction, currentGrid, currentGridSize, car.tileX, car.tileY);
         if (nextDirection) {
@@ -918,17 +918,17 @@ export function useVehicleSystems(
           // If no options, car will try again next frame (don't kill it)
         }
       }
-      
+
       // Keep the car alive unless it exceeded maxAge (handled at top of loop)
       updatedCars.push(car);
     }
-    
+
     carsRef.current = updatedCars;
   }, [worldStateRef, carsRef, carSpawnTimerRef, spawnRandomCar, trafficLightTimerRef, isIntersection, isMobile]);
 
   const updatePedestrians = useCallback((delta: number) => {
     const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed, zoom: currentZoom } = worldStateRef.current;
-    
+
     // Clear pedestrians if zoomed out too far (use mobile threshold on mobile for better perf)
     // Also use far zoom threshold for desktop when very zoomed out (for large maps)
     const pedestrianMinZoom = isMobile ? PEDESTRIAN_MIN_ZOOM_MOBILE : PEDESTRIAN_MIN_ZOOM;
@@ -937,14 +937,14 @@ export function useVehicleSystems(
       pedestriansRef.current = [];
       return;
     }
-    
+
     if (!currentGrid || currentGridSize <= 0) {
       pedestriansRef.current = [];
       return;
     }
-    
+
     const speedMultiplier = currentSpeed === 0 ? 0 : currentSpeed === 1 ? 1 : currentSpeed === 2 ? 2.5 : 4;
-    
+
     // Cache road tile count (expensive to calculate every frame)
     const currentGridVersion = gridVersionRef.current;
     let roadTileCount: number;
@@ -962,12 +962,12 @@ export function useVehicleSystems(
       }
       cachedRoadTileCountRef.current = { count: roadTileCount, gridVersion: currentGridVersion };
     }
-    
+
     // Scale pedestrian count with city size (road tiles), with a reasonable cap
     const targetPedestrians = roadTileCount * PEDESTRIAN_ROAD_TILE_DENSITY;
     const maxPedestrians = Math.min(PEDESTRIAN_MAX_COUNT, Math.max(150, targetPedestrians));
     pedestrianSpawnTimerRef.current -= delta;
-    
+
     if (pedestriansRef.current.length < maxPedestrians && pedestrianSpawnTimerRef.current <= 0) {
       // Spawn pedestrians in batches
       const spawnBatch = Math.min(PEDESTRIAN_SPAWN_BATCH_SIZE, maxPedestrians - pedestriansRef.current.length);
@@ -976,18 +976,18 @@ export function useVehicleSystems(
       }
       pedestrianSpawnTimerRef.current = PEDESTRIAN_SPAWN_INTERVAL;
     }
-    
+
     // OPTIMIZED: Reuse array instead of spreading
     const allPedestrians = pedestriansRef.current;
     const updatedPedestrians: Pedestrian[] = [];
-    
+
     // Pre-calculate traffic light state once per frame
     const trafficTime = trafficLightTimerRef.current;
     const lightState = getTrafficLightState(trafficTime);
-    
+
     for (let i = 0; i < allPedestrians.length; i++) {
       const ped = allPedestrians[i];
-      
+
       // Use the new state machine for pedestrian updates
       const alive = updatePedestrianState(
         ped,
@@ -997,7 +997,7 @@ export function useVehicleSystems(
         currentGridSize,
         allPedestrians
       );
-      
+
       if (alive) {
         // OPTIMIZED: Only check traffic lights for walking pedestrians approaching intersections
         // Check when approaching the end of the current tile (before entering intersection)
@@ -1011,18 +1011,18 @@ export function useVehicleSystems(
             if (roadCount < 3 && isRoadTile(currentGrid, currentGridSize, nextTile.x, nextTile.y - 1)) roadCount++;
             if (roadCount < 3 && isRoadTile(currentGrid, currentGridSize, nextTile.x + 1, nextTile.y)) roadCount++;
             if (roadCount < 3 && isRoadTile(currentGrid, currentGridSize, nextTile.x, nextTile.y + 1)) roadCount++;
-            
+
             if (roadCount >= 3 && !canProceedThroughIntersection(ped.direction, lightState)) {
               // Stop at edge of sidewalk (0.5 = middle of tile, near sidewalk edge)
               ped.progress = Math.min(ped.progress, 0.5);
             }
           }
         }
-        
+
         updatedPedestrians.push(ped);
       }
     }
-    
+
     pedestriansRef.current = updatedPedestrians;
   }, [worldStateRef, gridVersionRef, cachedRoadTileCountRef, pedestriansRef, pedestrianSpawnTimerRef, spawnPedestrian, trafficLightTimerRef, isMobile]);
 
@@ -1030,44 +1030,43 @@ export function useVehicleSystems(
     const { offset: currentOffset, zoom: currentZoom, grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
     const canvas = ctx.canvas;
     const dpr = window.devicePixelRatio || 1;
-    
+
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
+
     // Skip drawing cars when zoomed out too far
     const carMinZoom = isMobile ? CAR_MIN_ZOOM_MOBILE : CAR_MIN_ZOOM;
     if (currentZoom < carMinZoom) {
       return;
     }
-    
+
     if (!currentGrid || currentGridSize <= 0 || carsRef.current.length === 0) {
       return;
     }
-    
+
     ctx.save();
     ctx.scale(dpr * currentZoom, dpr * currentZoom);
     ctx.translate(currentOffset.x / currentZoom, currentOffset.y / currentZoom);
-    
+
     carsRef.current.forEach(car => {
       const { screenX, screenY } = gridToScreen(car.tileX, car.tileY, 0, 0);
       const centerX = screenX + TILE_WIDTH / 2;
       const centerY = screenY + TILE_HEIGHT / 2;
       const meta = DIRECTION_META[car.direction];
       const carX = centerX + meta.vec.dx * car.progress + meta.normal.nx * car.laneOffset;
-      
+
       // Check if this car is on a bridge tile and offset Y position for bridge height
       const tile = currentGrid[car.tileY]?.[car.tileX];
-      const bridgeOffset = tile && isBridgeTile(tile) && tile.building.bridgeInfo 
-        ? getBridgeDeckOffset(tile.building.bridgeInfo) 
-        : 0;
+      const bridgeInfo = tile ? getBridgeRenderInfo(tile) : null;
+      const bridgeOffset = bridgeInfo ? getBridgeDeckOffset(bridgeInfo) : 0;
       const carY = centerY + meta.vec.dy * car.progress + meta.normal.ny * car.laneOffset - bridgeOffset;
-      
+
       ctx.save();
       ctx.translate(carX, carY);
       ctx.rotate(meta.angle);
 
       const scale = 0.5; // 30% smaller than original
-      
+
       ctx.fillStyle = car.color;
       ctx.beginPath();
       ctx.moveTo(-10 * scale, -5 * scale);
@@ -1077,16 +1076,16 @@ export function useVehicleSystems(
       ctx.lineTo(-10 * scale, 5 * scale);
       ctx.closePath();
       ctx.fill();
-      
+
       ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
       ctx.fillRect(-4 * scale, -2.8 * scale, 7 * scale, 5.6 * scale);
-      
+
       ctx.fillStyle = '#111827';
       ctx.fillRect(-10 * scale, -4 * scale, 2.4 * scale, 8 * scale);
-      
+
       ctx.restore();
     });
-    
+
     ctx.restore();
   }, [worldStateRef, carsRef, isMobile]);
 
@@ -1094,21 +1093,21 @@ export function useVehicleSystems(
     const { offset: currentOffset, zoom: currentZoom, grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
     const canvas = ctx.canvas;
     const dpr = window.devicePixelRatio || 1;
-    
+
     // Skip drawing pedestrians when zoomed out too far
     const pedestrianMinZoom = isMobile ? PEDESTRIAN_MIN_ZOOM_MOBILE : PEDESTRIAN_MIN_ZOOM;
     if (currentZoom < pedestrianMinZoom) {
       return;
     }
-    
+
     if (!currentGrid || currentGridSize <= 0 || pedestriansRef.current.length === 0) {
       return;
     }
-    
+
     ctx.save();
     ctx.scale(dpr * currentZoom, dpr * currentZoom);
     ctx.translate(currentOffset.x / currentZoom, currentOffset.y / currentZoom);
-    
+
     const viewWidth = canvas.width / (dpr * currentZoom);
     const viewHeight = canvas.height / (dpr * currentZoom);
     const viewBounds = {
@@ -1117,11 +1116,11 @@ export function useVehicleSystems(
       viewRight: viewWidth - currentOffset.x / currentZoom + TILE_WIDTH,
       viewBottom: viewHeight - currentOffset.y / currentZoom + TILE_HEIGHT * 2,
     };
-    
+
     // Pass zoom level for LOD (Level of Detail) rendering
     // Only draw non-recreation pedestrians here (recreation pedestrians are drawn on air canvas)
     drawPedestriansUtil(ctx, pedestriansRef.current, viewBounds, currentZoom, 'non-recreation');
-    
+
     ctx.restore();
   }, [worldStateRef, pedestriansRef, isMobile]);
 
@@ -1130,21 +1129,21 @@ export function useVehicleSystems(
     const { offset: currentOffset, zoom: currentZoom, grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
     const canvas = ctx.canvas;
     const dpr = window.devicePixelRatio || 1;
-    
+
     // Skip drawing recreation pedestrians when zoomed out too far
     const pedestrianMinZoom = isMobile ? PEDESTRIAN_MIN_ZOOM_MOBILE : PEDESTRIAN_MIN_ZOOM;
     if (currentZoom < pedestrianMinZoom) {
       return;
     }
-    
+
     if (!currentGrid || currentGridSize <= 0 || pedestriansRef.current.length === 0) {
       return;
     }
-    
+
     ctx.save();
     ctx.scale(dpr * currentZoom, dpr * currentZoom);
     ctx.translate(currentOffset.x / currentZoom, currentOffset.y / currentZoom);
-    
+
     const viewWidth = canvas.width / (dpr * currentZoom);
     const viewHeight = canvas.height / (dpr * currentZoom);
     const viewBounds = {
@@ -1153,10 +1152,10 @@ export function useVehicleSystems(
       viewRight: viewWidth - currentOffset.x / currentZoom + TILE_WIDTH,
       viewBottom: viewHeight - currentOffset.y / currentZoom + TILE_HEIGHT * 2,
     };
-    
+
     // Draw only recreation pedestrians (at parks, sports facilities, etc.)
     drawPedestriansUtil(ctx, pedestriansRef.current, viewBounds, currentZoom, 'recreation');
-    
+
     ctx.restore();
   }, [worldStateRef, pedestriansRef, isMobile]);
 
@@ -1164,81 +1163,80 @@ export function useVehicleSystems(
     const { offset: currentOffset, zoom: currentZoom, grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
     const canvas = ctx.canvas;
     const dpr = window.devicePixelRatio || 1;
-    
+
     if (!currentGrid || currentGridSize <= 0 || emergencyVehiclesRef.current.length === 0) {
       return;
     }
-    
+
     ctx.save();
     ctx.scale(dpr * currentZoom, dpr * currentZoom);
     ctx.translate(currentOffset.x / currentZoom, currentOffset.y / currentZoom);
-    
+
     const viewWidth = canvas.width / (dpr * currentZoom);
     const viewHeight = canvas.height / (dpr * currentZoom);
     const viewLeft = -currentOffset.x / currentZoom - TILE_WIDTH;
     const viewTop = -currentOffset.y / currentZoom - TILE_HEIGHT * 2;
     const viewRight = viewWidth - currentOffset.x / currentZoom + TILE_WIDTH;
     const viewBottom = viewHeight - currentOffset.y / currentZoom + TILE_HEIGHT * 2;
-    
+
     const isVehicleBehindBuilding = (tileX: number, tileY: number): boolean => {
       const vehicleDepth = tileX + tileY;
-      
+
       for (let dy = 0; dy <= 1; dy++) {
         for (let dx = 0; dx <= 1; dx++) {
           if (dx === 0 && dy === 0) continue;
-          
+
           const checkX = tileX + dx;
           const checkY = tileY + dy;
-          
+
           if (checkX < 0 || checkY < 0 || checkX >= currentGridSize || checkY >= currentGridSize) {
             continue;
           }
-          
+
           const tile = currentGrid[checkY]?.[checkX];
           if (!tile) continue;
-          
+
           const buildingType = tile.building.type;
           const skipTypes: BuildingType[] = ['road', 'grass', 'empty', 'water', 'tree'];
           if (skipTypes.includes(buildingType)) {
             continue;
           }
-          
+
           const buildingDepth = checkX + checkY;
           if (buildingDepth > vehicleDepth) {
             return true;
           }
         }
       }
-      
+
       return false;
     };
-    
+
     emergencyVehiclesRef.current.forEach(vehicle => {
       const { screenX, screenY } = gridToScreen(vehicle.tileX, vehicle.tileY, 0, 0);
       const centerX = screenX + TILE_WIDTH / 2;
       const centerY = screenY + TILE_HEIGHT / 2;
       const meta = DIRECTION_META[vehicle.direction];
       const vehicleX = centerX + meta.vec.dx * vehicle.progress + meta.normal.nx * vehicle.laneOffset;
-      
+
       // Check if this vehicle is on a bridge tile and offset Y position for bridge height
       const tile = currentGrid[vehicle.tileY]?.[vehicle.tileX];
-      const bridgeOffset = tile && isBridgeTile(tile) && tile.building.bridgeInfo 
-        ? getBridgeDeckOffset(tile.building.bridgeInfo) 
-        : 0;
+      const bridgeInfo = tile ? getBridgeRenderInfo(tile) : null;
+      const bridgeOffset = bridgeInfo ? getBridgeDeckOffset(bridgeInfo) : 0;
       const vehicleY = centerY + meta.vec.dy * vehicle.progress + meta.normal.ny * vehicle.laneOffset - bridgeOffset;
-      
+
       if (vehicleX < viewLeft - 40 || vehicleX > viewRight + 40 || vehicleY < viewTop - 60 || vehicleY > viewBottom + 60) {
         return;
       }
-      
+
       ctx.save();
       ctx.translate(vehicleX, vehicleY);
       ctx.rotate(meta.angle);
-      
+
       const scale = 0.6;
-      
+
       const bodyColor = vehicle.type === 'fire_truck' ? '#dc2626' : '#1e40af';
-      
+
       const length = vehicle.type === 'fire_truck' ? 14 : 11;
       ctx.fillStyle = bodyColor;
       ctx.beginPath();
@@ -1249,22 +1247,22 @@ export function useVehicleSystems(
       ctx.lineTo(-length * scale, 5 * scale);
       ctx.closePath();
       ctx.fill();
-      
+
       ctx.fillStyle = vehicle.type === 'fire_truck' ? '#fbbf24' : '#ffffff';
       ctx.fillRect(-length * scale * 0.5, -3 * scale, length * scale, 6 * scale * 0.3);
-      
+
       ctx.fillStyle = 'rgba(200, 220, 255, 0.7)';
       ctx.fillRect(-2 * scale, -3 * scale, 5 * scale, 6 * scale);
-      
+
       const flashOn = Math.sin(vehicle.flashTimer) > 0;
       const flashOn2 = Math.sin(vehicle.flashTimer + Math.PI) > 0;
-      
+
       if (vehicle.type === 'fire_truck') {
         ctx.fillStyle = flashOn ? '#ff0000' : '#880000';
         ctx.fillRect(-6 * scale, -7 * scale, 3 * scale, 3 * scale);
         ctx.fillStyle = flashOn2 ? '#ff0000' : '#880000';
         ctx.fillRect(3 * scale, -7 * scale, 3 * scale, 3 * scale);
-        
+
         if (flashOn || flashOn2) {
           ctx.shadowColor = '#ff0000';
           ctx.shadowBlur = 6;
@@ -1277,7 +1275,7 @@ export function useVehicleSystems(
         ctx.fillRect(-5 * scale, -7 * scale, 3 * scale, 3 * scale);
         ctx.fillStyle = flashOn2 ? '#0066ff' : '#003388';
         ctx.fillRect(2 * scale, -7 * scale, 3 * scale, 3 * scale);
-        
+
         if (flashOn || flashOn2) {
           ctx.shadowColor = flashOn ? '#ff0000' : '#0066ff';
           ctx.shadowBlur = 6;
@@ -1286,13 +1284,13 @@ export function useVehicleSystems(
           ctx.shadowBlur = 0;
         }
       }
-      
+
       ctx.fillStyle = '#111827';
       ctx.fillRect(-length * scale, -4 * scale, 2 * scale, 8 * scale);
-      
+
       ctx.restore();
     });
-    
+
     ctx.restore();
   }, [worldStateRef, emergencyVehiclesRef]);
 
@@ -1302,42 +1300,42 @@ export function useVehicleSystems(
     const { offset: currentOffset, zoom: currentZoom, grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
     const canvas = ctx.canvas;
     const dpr = window.devicePixelRatio || 1;
-    
+
     if (!currentGrid || currentGridSize <= 0) return;
-    
+
     incidentAnimTimeRef.current += delta;
     const animTime = incidentAnimTimeRef.current;
-    
+
     ctx.save();
     ctx.scale(dpr * currentZoom, dpr * currentZoom);
     ctx.translate(currentOffset.x / currentZoom, currentOffset.y / currentZoom);
-    
+
     const viewWidth = canvas.width / (dpr * currentZoom);
     const viewHeight = canvas.height / (dpr * currentZoom);
     const viewLeft = -currentOffset.x / currentZoom - TILE_WIDTH * 2;
     const viewTop = -currentOffset.y / currentZoom - TILE_HEIGHT * 4;
     const viewRight = viewWidth - currentOffset.x / currentZoom + TILE_WIDTH * 2;
     const viewBottom = viewHeight - currentOffset.y / currentZoom + TILE_HEIGHT * 4;
-    
+
     // PERF: Use for...of instead of forEach for Map iteration
     for (const crime of activeCrimeIncidentsRef.current.values()) {
       const { screenX, screenY } = gridToScreen(crime.x, crime.y, 0, 0);
       const centerX = screenX + TILE_WIDTH / 2;
       const centerY = screenY + TILE_HEIGHT / 2;
-      
+
       if (centerX < viewLeft || centerX > viewRight || centerY < viewTop || centerY > viewBottom) {
         continue;
       }
-      
+
       const pulse = Math.sin(animTime * 4) * 0.3 + 0.7;
       const outerPulse = Math.sin(animTime * 3) * 0.5 + 0.5;
-      
+
       ctx.beginPath();
       ctx.arc(centerX, centerY - 8, 18 + outerPulse * 6, 0, Math.PI * 2);
       ctx.strokeStyle = `rgba(59, 130, 246, ${0.25 * (1 - outerPulse)})`;
       ctx.lineWidth = 2;
       ctx.stroke();
-      
+
       const gradient = ctx.createRadialGradient(centerX, centerY - 8, 0, centerX, centerY - 8, 14 * pulse);
       gradient.addColorStop(0, `rgba(59, 130, 246, ${0.5 * pulse})`);
       gradient.addColorStop(0.5, `rgba(59, 130, 246, ${0.2 * pulse})`);
@@ -1346,10 +1344,10 @@ export function useVehicleSystems(
       ctx.arc(centerX, centerY - 8, 14 * pulse, 0, Math.PI * 2);
       ctx.fillStyle = gradient;
       ctx.fill();
-      
+
       ctx.save();
       ctx.translate(centerX, centerY - 12);
-      
+
       ctx.fillStyle = `rgba(30, 64, 175, ${0.9 * pulse})`;
       ctx.beginPath();
       ctx.moveTo(0, -7);
@@ -1360,45 +1358,45 @@ export function useVehicleSystems(
       ctx.lineTo(-6, -4);
       ctx.closePath();
       ctx.fill();
-      
+
       ctx.strokeStyle = `rgba(147, 197, 253, ${pulse})`;
       ctx.lineWidth = 1;
       ctx.stroke();
-      
+
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(-1, -4, 2, 5);
       ctx.beginPath();
       ctx.arc(0, 4, 1.5, 0, Math.PI * 2);
       ctx.fill();
-      
+
       ctx.restore();
     }
-    
+
     for (let y = 0; y < currentGridSize; y++) {
       for (let x = 0; x < currentGridSize; x++) {
         const tile = currentGrid[y][x];
         if (!tile.building.onFire) continue;
-        
+
         const { screenX, screenY } = gridToScreen(x, y, 0, 0);
         const centerX = screenX + TILE_WIDTH / 2;
         const centerY = screenY + TILE_HEIGHT / 2;
-        
+
         if (centerX < viewLeft || centerX > viewRight || centerY < viewTop || centerY > viewBottom) {
           continue;
         }
-        
+
         const pulse = Math.sin(animTime * 6) * 0.3 + 0.7;
         const outerPulse = Math.sin(animTime * 4) * 0.5 + 0.5;
-        
+
         ctx.beginPath();
         ctx.arc(centerX, centerY - 12, 22 + outerPulse * 8, 0, Math.PI * 2);
         ctx.strokeStyle = `rgba(239, 68, 68, ${0.3 * (1 - outerPulse)})`;
         ctx.lineWidth = 2;
         ctx.stroke();
-        
+
         ctx.save();
         ctx.translate(centerX, centerY - 15);
-        
+
         ctx.fillStyle = `rgba(220, 38, 38, ${0.9 * pulse})`;
         ctx.beginPath();
         ctx.moveTo(0, -8);
@@ -1406,11 +1404,11 @@ export function useVehicleSystems(
         ctx.lineTo(-8, 5);
         ctx.closePath();
         ctx.fill();
-        
+
         ctx.strokeStyle = `rgba(252, 165, 165, ${pulse})`;
         ctx.lineWidth = 1;
         ctx.stroke();
-        
+
         ctx.fillStyle = '#fbbf24';
         ctx.beginPath();
         ctx.moveTo(0, -3);
@@ -1419,11 +1417,11 @@ export function useVehicleSystems(
         ctx.quadraticCurveTo(-0.5, 1.5, -2, 2.5);
         ctx.quadraticCurveTo(-2.5, 0, 0, -3);
         ctx.fill();
-        
+
         ctx.restore();
       }
     }
-    
+
     ctx.restore();
   }, [worldStateRef, activeCrimeIncidentsRef]);
 
