@@ -7,3 +7,4 @@ export { TileInfoPanel } from './TileInfoPanel';
 export { default as LeaderboardPanel } from './LeaderboardPanel';
 export { SecurityPanel } from './SecurityPanel';
 export { BankPanel } from './BankPanel';
+export { MultiplayerPanel } from './MultiplayerPanel';

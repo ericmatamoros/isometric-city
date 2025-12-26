@@ -25,6 +25,7 @@ import {
   AdvisorsPanel,
   SecurityPanel,
   BankPanel,
+  MultiplayerPanel,
 } from '@/components/game/panels';
 import { MiniMap } from '@/components/game/MiniMap';
 import { TopBar, StatsPanel } from '@/components/game/TopBar';
@@ -245,6 +246,7 @@ export default function Game({ onExit }: { onExit?: () => void }) {
           {state.activePanel === 'settings' && <SettingsPanel />}
           {state.activePanel === 'security' && <SecurityPanel onClose={() => setActivePanel('none')} />}
           {state.activePanel === 'bank' && <BankPanel onClose={() => setActivePanel('none')} />}
+          {state.activePanel === 'multiplayer' && <MultiplayerPanel onClose={() => setActivePanel('none')} />}
 
           <VinnieDialog open={showVinnieDialog} onOpenChange={setShowVinnieDialog} />
         </div>

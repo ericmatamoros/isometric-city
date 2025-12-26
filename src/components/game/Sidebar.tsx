@@ -10,6 +10,7 @@ import {
   SettingsIcon,
   SecurityIcon,
   BankIcon,
+  MultiplayerIcon,
 } from '@/components/ui/Icons';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -342,6 +343,28 @@ export const Sidebar = React.memo(function Sidebar({ onExit }: { onExit?: () => 
     },
   ], []);
 
+  // Check for required buildings to unlock panels
+  const hasCentralBank = useMemo(() => {
+    if (!state.grid) return false;
+    return state.grid.some(row =>
+      row.some(tile => tile.building?.type === 'central_bank')
+    );
+  }, [state.grid]);
+
+  const hasPoliceStation = useMemo(() => {
+    if (!state.grid) return false;
+    return state.grid.some(row =>
+      row.some(tile => tile.building?.type === 'police_station')
+    );
+  }, [state.grid]);
+
+  const hasGlobalMarket = useMemo(() => {
+    if (!state.grid) return false;
+    return state.grid.some(row =>
+      row.some(tile => tile.building?.type === 'global_market')
+    );
+  }, [state.grid]);
+
   return (
     <div className="w-56 bg-sidebar border-r border-sidebar-border flex flex-col h-full relative z-40">
       <div className="px-4 py-4 border-b border-sidebar-border">
@@ -462,17 +485,37 @@ export const Sidebar = React.memo(function Sidebar({ onExit }: { onExit?: () => 
             { panel: 'budget' as const, icon: <BudgetIcon size={16} />, label: 'Budget' },
             { panel: 'statistics' as const, icon: <ChartIcon size={16} />, label: 'Statistics' },
             { panel: 'advisors' as const, icon: <AdvisorIcon size={16} />, label: 'Advisors' },
-            { panel: 'security' as const, icon: <SecurityIcon size={16} />, label: 'Security' },
-            { panel: 'bank' as const, icon: <BankIcon size={16} />, label: 'Bank' },
+            {
+              panel: 'security' as const,
+              icon: <SecurityIcon size={16} />,
+              label: 'Security',
+              disabled: !hasPoliceStation,
+              tooltip: !hasPoliceStation ? 'Build a Police Station to unlock' : 'Security Center'
+            },
+            {
+              panel: 'bank' as const,
+              icon: <BankIcon size={16} />,
+              label: 'Bank',
+              disabled: !hasCentralBank,
+              tooltip: !hasCentralBank ? 'Build a Central Bank to unlock' : 'City Bank'
+            },
+            {
+              panel: 'multiplayer' as const,
+              icon: <MultiplayerIcon size={16} />,
+              label: 'Multiplayer',
+              disabled: !hasGlobalMarket,
+              tooltip: !hasGlobalMarket ? 'Build a Global Market to unlock' : 'Multiplayer Hub'
+            },
             { panel: 'settings' as const, icon: <SettingsIcon size={16} />, label: 'Settings' },
-          ].map(({ panel, icon, label }) => (
+          ].map(({ panel, icon, label, disabled, tooltip }) => (
             <Button
               key={panel}
-              onClick={() => setActivePanel(activePanel === panel ? 'none' : panel)}
+              onClick={() => !disabled && setActivePanel(activePanel === panel ? 'none' : panel)}
               variant={activePanel === panel ? 'default' : 'ghost'}
               size="icon-sm"
-              className="w-full"
-              title={label}
+              className={`w-full ${disabled ? 'opacity-30 cursor-not-allowed' : ''}`}
+              title={tooltip || label}
+              disabled={disabled}
             >
               {icon}
             </Button>

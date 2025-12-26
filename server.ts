@@ -49,12 +49,43 @@ app.prepare().then(() => {
         }
     }, 10000);
 
-    // ====================================================================
-    // ROBBERY TICK - Stochastic building robberies
-    // ====================================================================
     // Track in-memory state for alarm/police protection (persisted through server restart via reconnect)
     const playerPoliceProtection: Map<string, number> = new Map(); // walletAddress -> expiration timestamp
     const buildingAlarms: Map<string, number> = new Map(); // "worldId:x:y" -> expiration timestamp
+
+    // Load state from DB on startup
+    const loadServerState = async () => {
+        try {
+            console.log("Loading server state from database...");
+
+            // Load active alarms
+            const tilesWithAlarms = await (prisma as any).tile.findMany({
+                where: { alarmExpiresAt: { gt: new Date() } }
+            });
+            tilesWithAlarms.forEach((tile: any) => {
+                const tileKey = `${tile.worldId}:${tile.x}:${tile.y}`;
+                if (tile.alarmExpiresAt) {
+                    buildingAlarms.set(tileKey, new Date(tile.alarmExpiresAt).getTime());
+                }
+            });
+            console.log(`Loaded ${tilesWithAlarms.length} active alarms.`);
+
+            // Load active police protection
+            const usersWithProtection = await (prisma as any).user.findMany({
+                where: { policeProtectionUntil: { gt: new Date() } }
+            });
+            usersWithProtection.forEach((user: any) => {
+                if (user.policeProtectionUntil) {
+                    playerPoliceProtection.set(user.walletAddress, new Date(user.policeProtectionUntil).getTime());
+                }
+            });
+            console.log(`Loaded ${usersWithProtection.length} active police protections.`);
+        } catch (e) {
+            console.error("Failed to load server state:", e);
+        }
+    };
+
+    loadServerState();
 
     setInterval(async () => {
         try {
@@ -215,14 +246,62 @@ app.prepare().then(() => {
                 });
 
                 // Check if loan is overdue (dueAt is in the past)
-                if (new Date() > loan.dueAt && loan.borrower) {
-                    // Emit warning to borrower
-                    io.emit("loan_overdue", {
-                        loanId: loan.id,
-                        borrowerAddress: loan.borrower.walletAddress,
-                        outstanding: newOutstanding,
-                        dueAt: loan.dueAt
-                    });
+                const now = new Date();
+                if (now > loan.dueAt && loan.borrower) {
+                    // Grace period: 2 minutes (approx 4 in-game days in this demo)
+                    const gracePeriodMs = 2 * 60 * 1000;
+                    const isForeclosureTime = now.getTime() > new Date(loan.dueAt).getTime() + gracePeriodMs;
+
+                    if (isForeclosureTime) {
+                        // FORECLOSURE: Seize assets
+                        console.log(`Foreclosing loan ${loan.id} for ${loan.borrower.walletAddress}`);
+
+                        // Find borrower's tiles
+                        const borrowerTiles = await prisma.tile.findMany({
+                            where: { ownerId: loan.borrower.id }
+                        });
+
+                        if (borrowerTiles.length > 0) {
+                            // Seize the first tile (or most valuable)
+                            const seizedTile = borrowerTiles[0];
+
+                            await (prisma as any).tile.update({
+                                where: { id: seizedTile.id },
+                                data: {
+                                    ownerId: null,
+                                    forSale: true,
+                                    price: 1000 // Bank sale price
+                                }
+                            });
+
+                            // Mark loan as foreclosed (repaid for simplicity)
+                            await (prisma as any).loan.update({
+                                where: { id: loan.id },
+                                data: { repaid: true }
+                            });
+
+                            io.emit("loan_foreclosed", {
+                                loanId: loan.id,
+                                borrowerAddress: loan.borrower.walletAddress,
+                                seizedTile: { x: seizedTile.x, y: seizedTile.y },
+                                message: `Loan Foreclosed! Property at (${seizedTile.x}, ${seizedTile.y}) seized by the bank.`
+                            });
+                        } else {
+                            // No assets to seize - just mark as bad debt for now
+                            await (prisma as any).loan.update({
+                                where: { id: loan.id },
+                                data: { repaid: true }
+                            });
+                        }
+                    } else {
+                        // Emit warning to borrower
+                        io.emit("loan_overdue", {
+                            loanId: loan.id,
+                            borrowerAddress: loan.borrower.walletAddress,
+                            outstanding: newOutstanding,
+                            dueAt: loan.dueAt
+                        });
+                    }
                 }
             }
         } catch (e) {
@@ -925,6 +1004,84 @@ app.prepare().then(() => {
             } catch (e) {
                 console.error("Failed to process loan repayment:", e);
                 socket.emit("error", { message: "Failed to process repayment" });
+            }
+        });
+
+        // ====================================================================
+        // MULTIPLAYER BUILDINGS: GLOBAL MARKET & TRADE EMBASSY
+        // ====================================================================
+
+        // Get all tiles for sale in the world
+        socket.on("get_market_listings", async (data) => {
+            const { worldId } = data;
+            try {
+                const listings = await (prisma as any).tile.findMany({
+                    where: {
+                        worldId,
+                        forSale: true
+                    },
+                    include: { owner: true }
+                });
+                socket.emit("market_listings", listings);
+            } catch (e) {
+                console.error("Failed to fetch market listings:", e);
+            }
+        });
+
+        // Send money to another player
+        socket.on("send_gift", async (data) => {
+            const { fromAddress, toAddress, amount } = data;
+            try {
+                const sender = await prisma.user.findUnique({ where: { walletAddress: fromAddress } });
+                const recipient = await prisma.user.findUnique({ where: { walletAddress: toAddress } });
+
+                if (!sender || !recipient) {
+                    socket.emit("error", { message: "User not found" });
+                    return;
+                }
+
+                if (sender.balance < amount) {
+                    socket.emit("error", { message: "Insufficient funds" });
+                    return;
+                }
+
+                await prisma.$transaction([
+                    prisma.user.update({
+                        where: { id: sender.id },
+                        data: { balance: { decrement: amount } }
+                    }),
+                    prisma.user.update({
+                        where: { id: recipient.id },
+                        data: { balance: { increment: amount } }
+                    }),
+                    prisma.transaction.create({
+                        data: {
+                            amount: -amount,
+                            type: 'gift_sent',
+                            userId: sender.id
+                        }
+                    }),
+                    prisma.transaction.create({
+                        data: {
+                            amount: amount,
+                            type: 'gift_received',
+                            userId: recipient.id
+                        }
+                    })
+                ]);
+
+                // Notify both
+                socket.emit("gift_sent", { to: toAddress, amount });
+                io.emit("gift_received", { from: fromAddress, to: toAddress, amount });
+
+                // Update balances
+                const updatedSender = await prisma.user.findUnique({ where: { id: sender.id } });
+                socket.emit("balance_update", { balance: updatedSender?.balance || 0 });
+
+                console.log(`Gift of $${amount} sent from ${fromAddress} to ${toAddress}`);
+            } catch (e) {
+                console.error("Failed to send gift:", e);
+                socket.emit("error", { message: "Failed to send gift" });
             }
         });
 

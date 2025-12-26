@@ -480,7 +480,7 @@ export interface GameState {
   notifications: Notification[];
   advisorMessages: AdvisorMessage[];
   history: HistoryPoint[];
-  activePanel: 'none' | 'budget' | 'statistics' | 'advisors' | 'settings' | 'security' | 'bank';
+  activePanel: 'none' | 'budget' | 'statistics' | 'advisors' | 'settings' | 'security' | 'bank' | 'multiplayer';
   disastersEnabled: boolean;
   adjacentCities: AdjacentCity[];
   waterBodies: WaterBody[];
