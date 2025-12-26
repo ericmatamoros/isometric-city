@@ -1079,38 +1079,29 @@ function createBuilding(type: BuildingType): Building {
 }
 
 // ============================================================================
-// Bridge Detection and Creation
+// Bridge Detection and Creation (Newer System)
 // ============================================================================
 
-/** Maximum width of water a bridge can span */
-const MAX_BRIDGE_SPAN = 10;
-
-/** Bridge type thresholds based on span width */
-const BRIDGE_TYPE_THRESHOLDS = {
-  large: 5,    // 1-5 tiles = truss bridge
-  suspension: 10, // 6-10 tiles = suspension bridge
-} as const;
-
-/** Get the appropriate bridge type for a given span */
-function getBridgeTypeForSpan(span: number): BridgeType {
-  // 1-tile bridges are simple bridges without trusses
-  if (span === 1) return 'small';
-  if (span <= BRIDGE_TYPE_THRESHOLDS.large) return 'large';
-  return 'suspension';
-}
+/** Bridge orientation type */
+type BridgeOrientation = 'ns' | 'ew';
 
 /** Number of variants per bridge type */
 const BRIDGE_VARIANTS: Record<BridgeType, number> = {
-  small: 3,
-  medium: 3,
-  large: 2,
-  suspension: 2,
+  wooden_bridge: 3,
+  stone_bridge: 3,
+  steel_bridge: 3,
+  beam_bridge: 2,
+  arch_bridge: 2,
+  suspension_bridge: 2,
+  cable_stayed: 2,
+  golden_gate: 2,
 };
 
 /** Generate a deterministic variant based on position */
 function getBridgeVariant(x: number, y: number, bridgeType: BridgeType): number {
   const seed = (x * 31 + y * 17) % 100;
-  return seed % BRIDGE_VARIANTS[bridgeType];
+  const variantCount = BRIDGE_VARIANTS[bridgeType] || 2;
+  return seed % variantCount;
 }
 
 /** Create a bridge building with all metadata */
@@ -1145,18 +1136,13 @@ function createBridgeBuilding(
   };
 }
 
-/** Check if a tile at position is water */
-function isWaterTile(grid: Tile[][], gridSize: number, x: number, y: number): boolean {
-  if (x < 0 || y < 0 || x >= gridSize || y >= gridSize) return false;
-  return grid[y][x].building.type === 'water';
-}
-
 /** Check if a tile at position is a road or bridge */
 function isRoadOrBridgeTile(grid: Tile[][], gridSize: number, x: number, y: number): boolean {
   if (x < 0 || y < 0 || x >= gridSize || y >= gridSize) return false;
   const type = grid[y][x].building.type;
   return type === 'road' || type === 'bridge';
 }
+
 
 /** Bridge opportunity data */
 interface BridgeOpportunity {
